@@ -37,3 +37,6 @@ yarn-error.*
 *.tsbuildinfo
 
 app-example
+configs
+# .gitignore
+configs/FirebaseConfigs.js
