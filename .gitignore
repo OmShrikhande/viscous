@@ -40,3 +40,6 @@ app-example
 configs
 # .gitignore
 configs/FirebaseConfigs.js
+# Prevent secrets from being pushed
+FirebaseConfigs.js
+*.env
