@@ -1,19 +1,35 @@
 import React, { useState } from 'react';
-import { View, Text, Switch, StyleSheet } from 'react-native';
+import { View, Text, Switch, StyleSheet, Alert } from 'react-native';
 import { doc, updateDoc } from 'firebase/firestore';
-import { firestoreDb as db } from './../../configs/FirebaseConfigs'; // adjust path
+import { firestoreDb as db } from './../../configs/FirebaseConfigs';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const ThemeToggleSwitch = ({ currentValue }) => {
+const ThemeToggleSwitch = ({ currentValue, userEmail }) => {
   const [isUpdating, setIsUpdating] = useState(false);
 
   const handleToggle = async () => {
     setIsUpdating(true);
+    const newValue = !currentValue;
+
     try {
-      const docRef = doc(db, 'apklink', 'theme');
-      await updateDoc(docRef, { isdark: !currentValue });
+      // 🔥 Update Firestore
+      const docRef = doc(db, 'userdata', userEmail);
+      await updateDoc(docRef, { isDark: newValue });
+
+      // 💾 Update AsyncStorage
+      const storedData = await AsyncStorage.getItem('userData');
+      if (storedData) {
+        const parsed = JSON.parse(storedData);
+        parsed.isDark = newValue;
+        await AsyncStorage.setItem('userData', JSON.stringify(parsed));
+      }
+
+      Alert.alert('Theme Updated', `Switched to ${newValue ? 'Dark' : 'Light'} Mode`);
     } catch (error) {
       console.error('Error updating theme:', error);
+      Alert.alert('Error', 'Failed to update theme');
     }
+
     setIsUpdating(false);
   };
 

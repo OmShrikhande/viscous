@@ -1,18 +1,21 @@
-// Updated LoginScreen.js
-import React from 'react';
-import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { Colors } from '@/constants/Colors';
 import * as WebBrowser from 'expo-web-browser';
-import { useOAuth } from '@clerk/clerk-expo';
+import { useOAuth, useUser } from '@clerk/clerk-expo';
 import * as Linking from 'expo-linking';
 import { useWarmUpBrowser } from '@/hooks/useWarmUpBrowser';
 import { useWindowDimensions } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {firestoreDb as db } from './../configs/FirebaseConfigs'; // 🔧 your firebase file
+import { setDoc, doc, serverTimestamp } from 'firebase/firestore';
 
-WebBrowser.maybeCompleteAuthSession()
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
-  
   useWarmUpBrowser();
+  const { width, height } = useWindowDimensions();
+  const [tapCount, setTapCount] = useState(0);
   const { startOAuthFlow: startGoogleOAuthFlow } = useOAuth({ strategy: 'oauth_google' });
 
   let startAppleOAuthFlow;
@@ -22,39 +25,98 @@ export default function LoginScreen() {
     console.error('Apple OAuth strategy is not supported. Please check your Clerk configuration.', err);
   }
 
-  const { width, height } = useWindowDimensions();
+  useEffect(() => {
+    const initializeRole = async () => {
+      const existingRole = await AsyncStorage.getItem('userRole');
+      if (!existingRole) {
+        await AsyncStorage.setItem('userRole', 'user');
+      }
+    };
+    initializeRole();
+  }, []);
 
-  const onPressGoogle = React.useCallback(async () => {
+  const handleSecretTap = async () => {
+    const newCount = tapCount + 1;
+    setTapCount(newCount);
+
+    if (newCount >= 10) {
+      await AsyncStorage.setItem('userRole', 'admin');
+      Alert.alert('Backdoor Activated', 'You are now an admin!');
+      setTapCount(0);
+    }
+  };
+
+  const storeUserData = async (user) => {
+  try {
+    const email = user.emailAddresses?.[0]?.emailAddress || 'unknown';
+    const name = user.fullName || 'No Name';
+    const image = user.imageUrl;
+    const role = await AsyncStorage.getItem('userRole') || 'user';
+
+    const userData = {
+      name,
+      email,
+      image,
+      role,
+      isDark: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    // 🔥 Store in Firestore
+    await setDoc(doc(db, 'userdata', email), {
+      ...userData,
+      createdAt: serverTimestamp(), // Firestore will overwrite the date
+    });
+
+    // 💾 Store locally in AsyncStorage
+    await AsyncStorage.setItem('userData', JSON.stringify(userData));
+
+    console.log('User data saved to Firestore & local storage');
+  } catch (error) {
+    console.error('Error storing user data:', error);
+  }
+};
+
+  const onPressGoogle = useCallback(async () => {
     try {
-      const { createdSessionId, signIn, signUp, setActive } = await startGoogleOAuthFlow({
+      const { createdSessionId, setActive, signIn, signUp } = await startGoogleOAuthFlow({
         redirectUrl: Linking.createURL('/dashboard', { scheme: 'myapp' }),
       });
 
       if (createdSessionId) {
-        setActive({ session: createdSessionId });
-      } else {
-        // Use signIn or signUp for next steps such as MFA
+        await setActive({ session: createdSessionId });
+
+        // Wait a moment for Clerk user to be available
+        setTimeout(async () => {
+          const { user } = useUser();
+          if (user) {
+            await storeUserData(user);
+          }
+        }, 1000);
       }
     } catch (err) {
       console.error('Google OAuth error', err);
     }
   }, []);
 
-  const onPressApple = React.useCallback(async () => {
-    if (!startAppleOAuthFlow) {
-      console.error('Apple OAuth is not configured properly.');
-      return;
-    }
+  const onPressApple = useCallback(async () => {
+    if (!startAppleOAuthFlow) return;
 
     try {
-      const { createdSessionId, signIn, signUp, setActive } = await startAppleOAuthFlow({
+      const { createdSessionId, setActive } = await startAppleOAuthFlow({
         redirectUrl: Linking.createURL('/dashboard', { scheme: 'myapp' }),
       });
 
       if (createdSessionId) {
-        setActive({ session: createdSessionId });
-      } else {
-        // Use signIn or signUp for next steps such as MFA
+        await setActive({ session: createdSessionId });
+
+        // Store Apple user info
+        setTimeout(async () => {
+          const { user } = useUser();
+          if (user) {
+            await storeUserData(user);
+          }
+        }, 1000);
       }
     } catch (err) {
       console.error('Apple OAuth error', err);
@@ -64,12 +126,14 @@ export default function LoginScreen() {
   return (
     <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
       <View style={[styles.container, { paddingHorizontal: width * 0.05 }]}>
-        <View style={[styles.imageContainer, { marginTop: height * 0.15 }]}>
-          <Image
-            source={require('../assets/images/image.png')}
-            style={[styles.image, { width: width * 0.6, height: height * 0.35 }]}
-          />
-        </View>
+        <TouchableOpacity onPress={handleSecretTap}>
+          <View style={[styles.imageContainer, { marginTop: height * 0.15 }]}>
+            <Image
+              source={require('../assets/images/image.png')}
+              style={[styles.image, { width: width * 0.6, height: height * 0.35 }]}
+            />
+          </View>
+        </TouchableOpacity>
 
         <View style={[styles.subContainer, { padding: width * 0.08 }]}>
           <Text style={styles.title}>
@@ -83,6 +147,7 @@ export default function LoginScreen() {
           <TouchableOpacity style={styles.btn} onPress={onPressGoogle}>
             <Text style={styles.btnText}>Login with Google</Text>
           </TouchableOpacity>
+
           <TouchableOpacity style={styles.btn} onPress={onPressApple}>
             <Text style={styles.btnText}>Login with Apple</Text>
           </TouchableOpacity>
@@ -92,7 +157,6 @@ export default function LoginScreen() {
   );
 }
 
-// External stylesheet
 const styles = StyleSheet.create({
   container: {
     flex: 1,
