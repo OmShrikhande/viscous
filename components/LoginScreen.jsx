@@ -11,6 +11,7 @@ import { useWindowDimensions } from 'react-native';
 WebBrowser.maybeCompleteAuthSession()
 
 export default function LoginScreen() {
+  
   useWarmUpBrowser();
   const { startOAuthFlow: startGoogleOAuthFlow } = useOAuth({ strategy: 'oauth_google' });
 

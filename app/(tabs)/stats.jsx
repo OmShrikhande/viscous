@@ -5,10 +5,24 @@ import { collection, getDocs, onSnapshot, updateDoc, doc } from "firebase/firest
 import * as Print from "expo-print"; // For PDF generation
 import * as Sharing from "expo-sharing"; // For sharing files
 import * as FileSystem from "expo-file-system"; // For file handling
+import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function Stats() {
   const [locations, setLocations] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+    const router = useRouter();
+  useEffect(() => {
+    const checkAdmin = async () => {
+      const role = await AsyncStorage.getItem('userRole'); // or however you check
+      if (role !== 'admin') {
+        router.replace('/home'); // Redirect non-admins
+      }
+    };
+
+    checkAdmin();
+  }, []);
+
 
   const fetchLocations = useCallback(async () => {
     setRefreshing(true);

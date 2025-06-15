@@ -1,273 +1,240 @@
-import React, { useEffect, useState, useRef } from "react";
+// MapScreen.js
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Dimensions,
-  Alert,
-} from "react-native";
-import MapView, { Marker, Polyline } from "react-native-maps";
-import { Ionicons } from "@expo/vector-icons";
-import { firestoreDb, realtimeDatabase } from "../../configs/FirebaseConfigs";
-import { doc, getDocs, collection } from "firebase/firestore";
-import { ref, onValue, set } from "firebase/database";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+  ActivityIndicator,
+  Image,
+  ScrollView,
+  TouchableOpacity
+} from 'react-native';
+import MapView, { Marker, AnimatedRegion } from 'react-native-maps';
+import Slider from '@react-native-community/slider';
+import { ref, onValue } from 'firebase/database';
+import { collection, getDocs } from 'firebase/firestore';
+import { firestoreDb, realtimeDatabase } from './../../configs/FirebaseConfigs';
+import LastLogsDrawer from './../../components/usefulComponent/LastLogsDrawer';
 
-export default function Explore() {
-  const [busLocation, setBusLocation] = useState({
-    latitude: 21.1496,
-    longitude: 79.0807,
-  });
-  const [busDirection, setBusDirection] = useState(0);
-  const [prevBusDirection, setPrevBusDirection] = useState(0);
-  const [busStops, setBusStops] = useState([]);
-  const [speed, setSpeed] = useState("--");
-  const [dailyDistance, setDailyDistance] = useState("--");
-  const [totalDistance, setTotalDistance] = useState("--");
-  const [routeCoordinates, setRouteCoordinates] = useState([]);
-  const mapRef = useRef(null);
+const MapScreen = () => {
+  const [zoom, setZoom] = useState(0.05);
+  const [location, setLocation] = useState(null);
+  const [speed, setSpeed] = useState(null);
+  const [timestamp, setTimestamp] = useState(null);
+  const [stops, setStops] = useState([]);
+  const [isDark, setIsDark] = useState(false);
+  const [logStops, setLogStops] = useState([]);
+  const [currentStopSerial, setCurrentStopSerial] = useState(null);
 
   useEffect(() => {
-    fetchBusStops();
-    trackLiveLocation();
-    loadStoredCoordinates();
+    const locationRef = ref(realtimeDatabase, '/bus/Location/');
+    const unsub = onValue(locationRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data?.Latitude && data?.Longitude) {
+        const currentLoc = {
+          latitude: parseFloat(data.Latitude),
+          longitude: parseFloat(data.Longitude),
+        };
+        setLocation(currentLoc);
+        setSpeed(data.Speed);
+        setTimestamp(data.Timestamp);
+        determineNearbyStops(currentLoc);
+      }
+    });
+    return () => unsub();
+  }, [stops]);
+
+  useEffect(() => {
+    const themeRef = ref(realtimeDatabase, '/apklink/theme/isdark');
+    const unsub = onValue(themeRef, (snapshot) => {
+      const value = snapshot.val();
+      setIsDark(value === true);
+    });
+    return () => unsub();
   }, []);
 
-  const fetchBusStops = async () => {
+useEffect(() => {
+  const fetchStops = async () => {
     try {
-      const querySnapshot = await getDocs(collection(firestoreDb, "Locations"));
-      const stops = [];
-      querySnapshot.forEach((doc) => {
-        const { Latitude, Longitude } = doc.data();
-        if (Latitude && Longitude) {
-          stops.push({
-            latitude: parseFloat(Latitude),
-            longitude: parseFloat(Longitude),
+      const locationsCollection = collection(firestoreDb, 'Locations');
+      const snapshot = await getDocs(locationsCollection);
+
+      const parsedStops = [];
+
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        const rawLat = data?.Latitude;
+        const rawLng = data?.Longitude;
+        const rawSerial = data?.serialNumber;
+
+        const latitude = parseFloat(rawLat);
+        const longitude = parseFloat(rawLng);
+        const serialNumber = parseInt(rawSerial);
+
+        const isValid = !isNaN(latitude) && !isNaN(longitude) && !isNaN(serialNumber);
+
+        if (isValid) {
+          parsedStops.push({
             name: doc.id,
+            latitude,
+            longitude,
+            serialNumber,
+            reached: data.reached === true,
+          });
+        } else {
+          console.warn('Skipping invalid stop:', {
+            name: doc.id,
+            latitude,
+            longitude,
+            serialNumber,
+            rawLat,
+            rawLng,
+            rawSerial,
           });
         }
       });
-      setBusStops(stops);
+
+      parsedStops.sort((a, b) => a.serialNumber - b.serialNumber);
+      setStops(parsedStops);
     } catch (error) {
-      console.error("Error fetching bus stops:", error);
+      console.error('Error fetching stops from Firestore:', error);
     }
   };
 
-  const calculateSmoothRotation = (prevDirection, newDirection) => {
-    const diff = newDirection - prevDirection;
-    if (Math.abs(diff) > 180) {
-      if (diff > 0) {
-        return prevDirection + (diff - 360) * 0.1;
-      } else {
-        return prevDirection + (diff + 360) * 0.1;
-      }
-    }
-    return prevDirection + diff * 0.1;
-  };
+  fetchStops();
+}, []);
 
-  const trackLiveLocation = () => {
-    const busRef = ref(realtimeDatabase, "bus");
-    onValue(busRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data?.Location) {
-        const { Latitude, Longitude, Speed } = data.Location;
-        const newLocation = { latitude: Latitude, longitude: Longitude };
 
-        setBusDirection((prevDirection) => {
-          const dx = Longitude - busLocation.longitude;
-          const dy = Latitude - busLocation.latitude;
-          const newDirection = (Math.atan2(dy, dx) * 180) / Math.PI;
-          const smoothDirection = calculateSmoothRotation(prevDirection, newDirection);
-          setPrevBusDirection(prevDirection);
-          return smoothDirection;
-        });
+  const determineNearbyStops = (currentLoc) => {
+    if (!stops.length) return;
 
-        setBusLocation(newLocation);
-        setSpeed(Speed ? Speed.toFixed(2) : "--");
-        setDailyDistance(data.Distance?.DailyDistance?.toFixed(2) || "--");
-        setTotalDistance(data.Distance?.TotalDistance?.toFixed(2) || "--");
-        snapToRoads(newLocation);
-      }
+    const closest = stops.reduce((prev, curr) => {
+      const dist = (lat1, lon1, lat2, lon2) => {
+        return Math.sqrt(Math.pow(lat1 - lat2, 2) + Math.pow(lon1 - lon2, 2));
+      };
+      const prevDist = dist(prev.latitude, prev.longitude, currentLoc.latitude, currentLoc.longitude);
+      const currDist = dist(curr.latitude, curr.longitude, currentLoc.latitude, currentLoc.longitude);
+      return currDist < prevDist ? curr : prev;
     });
+
+    const index = stops.findIndex(s => s.serialNumber === closest.serialNumber);
+    const start = Math.max(0, index - 2);
+    const end = Math.min(stops.length, index + 3);
+    setLogStops(stops.slice(start, end));
+    setCurrentStopSerial(closest.serialNumber);
   };
 
-  const loadStoredCoordinates = async () => {
-    try {
-      const storedCoordinates = await AsyncStorage.getItem("routeCoordinates");
-      if (storedCoordinates) {
-        setRouteCoordinates(JSON.parse(storedCoordinates));
-        console.log("Loaded stored coordinates:", JSON.parse(storedCoordinates));
-      }
-    } catch (error) {
-      console.error("Error loading stored coordinates:", error);
-    }
-  };
-
-  const saveCoordinates = async (coordinates) => {
-    try {
-      await AsyncStorage.setItem("routeCoordinates", JSON.stringify(coordinates));
-      console.log("Saved coordinates:", coordinates);
-    } catch (error) {
-      console.error("Error saving coordinates:", error);
-    }
-  };
-
-  const resetRouteIfNearTarget = (location) => {
-    if (isNearTarget(location)) {
-      console.log("Resetting route as the location is near the target.");
-      setRouteCoordinates([]);
-      saveCoordinates([]);
-    }
-  };
-
-  const highlightRouteFromStoredCoordinates = () => {
-    if (routeCoordinates.length < 2) {
-      console.log("Not enough coordinates to highlight a route.");
-      return;
-    }
-  };
-
-  const snapToRoads = async (location) => {
-    try {
-      const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
-      const response = await fetch(
-        `https://roads.googleapis.com/v1/snapToRoads?path=${location.latitude},${location.longitude}&interpolate=true&key=${apiKey}`
-      );
-      if (!response.ok) {
-        throw new Error(`Roads API error: ${response.statusText}`);
-      }
-      const data = await response.json();
-      if (data.snappedPoints && data.snappedPoints.length > 0) {
-        const snappedLocation = {
-          latitude: data.snappedPoints[0].location.latitude,
-          longitude: data.snappedPoints[0].location.longitude,
-        };
-        resetRouteIfNearTarget(snappedLocation);
-        setRouteCoordinates((prev) => {
-          const updatedCoordinates = [...prev, snappedLocation];
-          saveCoordinates(updatedCoordinates);
-          return updatedCoordinates;
-        });
-        highlightRouteFromStoredCoordinates();
-      } else {
-        console.log("No snapped points returned from Roads API.");
-      }
-    } catch (error) {
-      console.error("Error calling Roads API:", error);
-    }
-  };
-
-  const isNearTarget = (location) => {
-    const target = { latitude: 21.1500, longitude: 79.0800 };
-    const distance = Math.sqrt(
-      Math.pow(location.latitude - target.latitude, 2) +
-      Math.pow(location.longitude - target.longitude, 2)
+  if (!location) {
+    return (
+      <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}> 
+        <ActivityIndicator size="large" />
+      </View>
     );
-    return distance < 0.001;
-  };
+  }
 
-  const resetTotalDistance = () => {
-    const distanceRef = ref(realtimeDatabase, "bus/Distance/TotalDistance");
-    set(distanceRef, 0)
-      .then(() => {
-        Alert.alert("Success", "Total distance reset successfully.");
-        setTotalDistance("0.00");
-      })
-      .catch((error) => {
-        console.error("Error resetting total distance:", error);
-      });
+  const region = {
+    latitude: location.latitude,
+    longitude: location.longitude,
+    latitudeDelta: zoom,
+    longitudeDelta: zoom,
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
+      <View style={styles.topBar} />
+
       <MapView
-        ref={mapRef}
         style={styles.map}
-        initialRegion={{
-          latitude: busLocation.latitude,
-          longitude: busLocation.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }}
+        region={region}
+        provider="google"
       >
-        <Marker
-          coordinate={busLocation}
-          title="Bus Location"
-          rotation={busDirection}
-          anchor={{ x: 0.5, y: 0.5 }}
-          flat={true}
-        >
-          <Ionicons name="arrow-forward-circle" size={30} color="blue" />
+        <Marker coordinate={location}>
+          <Image
+            source={require('./../../assets/images/images.jpeg')}
+            style={{ width: 40, height: 40 }}
+            resizeMode="contain"
+          />
         </Marker>
-        {busStops.map((stop, index) => (
+
+        {stops.map((stop, idx) => (
           <Marker
-            key={index}
+            key={idx}
             coordinate={{ latitude: stop.latitude, longitude: stop.longitude }}
+            pinColor={
+              stop.serialNumber === currentStopSerial ? 'blue' : stop.reached ? 'green' : 'red'
+            }
             title={stop.name}
           />
         ))}
-        <Polyline coordinates={routeCoordinates} strokeColor="blue" strokeWidth={4} />
       </MapView>
+
       <View style={styles.infoContainer}>
-        <Text style={styles.infoText}>Speed: {speed} km/h</Text>
-        <Text style={styles.infoText}>Daily Distance: {dailyDistance} km</Text>
-        <Text style={styles.infoText}>Total Distance: {totalDistance} km</Text>
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() =>
-            mapRef.current.animateToRegion({
-              ...busLocation,
-              latitudeDelta: 0.01,
-              longitudeDelta: 0.01,
-            })
-          }
-        >
-          <Text style={styles.buttonText}>Focus on Bus</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.button, styles.resetButton]}
-          onPress={resetTotalDistance}
-        >
-          <Text style={styles.buttonText}>Reset Total Distance</Text>
-        </TouchableOpacity>
+        <Text style={[styles.infoText, { color: isDark ? '#fff' : '#000' }]}>Speed: {speed ? `${speed} km/h` : 'Loading...'}</Text>
+        <Text style={[styles.infoText, { color: isDark ? '#fff' : '#000' }]}>Time: {timestamp ? new Date(timestamp).toLocaleString() : 'Loading...'}</Text>
       </View>
+
+      <View style={styles.sliderContainer}>
+        <Text style={[styles.sliderLabel, { color: isDark ? '#fff' : '#000' }]}>Zoom Level: {zoom.toFixed(3)}</Text>
+        <Slider
+          minimumValue={0.005}
+          maximumValue={0.2}
+          value={zoom}
+          step={0.005}
+          onValueChange={setZoom}
+          minimumTrackTintColor="#1E90FF"
+          maximumTrackTintColor="#d3d3d3"
+        />
+      </View>
+
+      <View style={{ marginHorizontal: 20, marginTop: 10 }}>
+        <Text style={{ color: isDark ? '#fff' : '#000', fontSize: 16, fontWeight: 'bold', marginBottom: 5 }}>Nearby Stops:</Text>
+        {logStops.map((stop, index) => (
+          <Text key={index} style={{ color: isDark ? '#fff' : '#000', marginBottom: 3 }}>
+            🛑 {stop.name} (SR No: {stop.serialNumber})
+          </Text>
+        ))}
+      </View>
+
+      <LastLogsDrawer isDark={isDark} stops={logStops} />
     </View>
   );
-}
+};
+
+export default MapScreen;
+
+const { height } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: {
+    flex: 1,
+    paddingTop: 30,
+  },
+  topBar: {
+    height: 4,
+    width: '100%',
+    backgroundColor: 'lightblue',
+    marginBottom: 10,
+  },
   map: {
-    width: Dimensions.get("window").width,
-    height: Dimensions.get("window").height,
+    height: height / 2,
+    width: '100%',
+  },
+  sliderContainer: {
+    marginTop: 10,
+    paddingHorizontal: 20,
+  },
+  sliderLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 10,
   },
   infoContainer: {
-    position: "absolute",
-    bottom: 20,
-    left: 20,
-    right: 20,
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-    borderRadius: 10,
-    padding: 15,
+    marginTop: 15,
+    paddingHorizontal: 20,
   },
   infoText: {
-    color: "white",
-    fontSize: 14,
-    fontWeight: "bold",
-    marginBottom: 10,
-  },
-  button: {
-    backgroundColor: "blue",
-    padding: 10,
-    borderRadius: 5,
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  resetButton: { backgroundColor: "red" },
-  buttonText: {
-    color: "white",
-    fontSize: 14,
-    fontWeight: "bold",
+    fontSize: 16,
+    marginBottom: 4,
   },
 });
