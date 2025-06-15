@@ -38,3 +38,5 @@ yarn-error.*
 
 app-example
 configs
+# .gitignore
+configs/FirebaseConfigs.js
