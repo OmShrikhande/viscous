@@ -1,4 +1,3 @@
-// MapScreen.js
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -10,12 +9,14 @@ import {
   ScrollView,
   TouchableOpacity
 } from 'react-native';
-import MapView, { Marker, AnimatedRegion } from 'react-native-maps';
+import MapView, { Marker } from 'react-native-maps';
 import Slider from '@react-native-community/slider';
 import { ref, onValue } from 'firebase/database';
-import { collection, getDocs } from 'firebase/firestore';
-import { firestoreDb, realtimeDatabase } from './../../configs/FirebaseConfigs';
+import { collection, getDocs, doc, onSnapshot } from 'firebase/firestore';
+import { firestoreDb, realtimeDatabase, auth } from './../../configs/FirebaseConfigs';
 import LastLogsDrawer from './../../components/usefulComponent/LastLogsDrawer';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 
 const MapScreen = () => {
   const [zoom, setZoom] = useState(0.05);
@@ -45,14 +46,40 @@ const MapScreen = () => {
     return () => unsub();
   }, [stops]);
 
-  useEffect(() => {
-    const themeRef = ref(realtimeDatabase, '/apklink/theme/isdark');
-    const unsub = onValue(themeRef, (snapshot) => {
-      const value = snapshot.val();
-      setIsDark(value === true);
-    });
-    return () => unsub();
-  }, []);
+useEffect(() => {
+  const fetchUserTheme = async () => {
+    try {
+      const userDataJson = await AsyncStorage.getItem('userData');
+
+      if (!userDataJson) {
+        console.warn('⚠️ userData not found in AsyncStorage');
+        return;
+      }
+
+      const { email } = JSON.parse(userDataJson);
+      if (!email) {
+        console.warn('⚠️ Email not found inside userData');
+        return;
+      }
+
+      const userDocRef = doc(firestoreDb, 'userdata', email);
+      const unsub = onSnapshot(userDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setIsDark(data.isDark === true);
+        }
+      });
+
+      return () => unsub();
+    } catch (err) {
+      console.error('Failed to fetch theme:', err);
+    }
+  };
+
+  fetchUserTheme();
+}, []);
+
+
 
 useEffect(() => {
   const fetchStops = async () => {

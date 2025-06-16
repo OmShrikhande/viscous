@@ -1,28 +1,151 @@
-import React, { useEffect, useState, useCallback } from "react";
-import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity } from "react-native";
-import { firestoreDb } from "../../configs/FirebaseConfigs"; // Import Firestore
-import { collection, getDocs, onSnapshot, updateDoc, doc } from "firebase/firestore"; // Firestore methods
-import * as Print from "expo-print"; // For PDF generation
-import * as Sharing from "expo-sharing"; // For sharing files
-import * as FileSystem from "expo-file-system"; // For file handling
-import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useEffect, useState, useCallback, useMemo } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  RefreshControl,
+  TouchableOpacity,
+  ActivityIndicator,
+} from "react-native";
+import { firestoreDb } from "../../configs/FirebaseConfigs";
+import {
+  collection,
+  getDocs,
+  updateDoc,
+  doc,
+  onSnapshot,
+} from "firebase/firestore";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
+import * as FileSystem from "expo-file-system";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function Stats() {
   const [locations, setLocations] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
-    const router = useRouter();
+  const [role, setRole] = useState(null);
+  const [isDark, setIsDark] = useState(false);
+  const [email, setEmail] = useState(null);
+
+  // 👤 Fetch user data + real-time theme updates
   useEffect(() => {
-    const checkAdmin = async () => {
-      const role = await AsyncStorage.getItem('userRole'); // or however you check
-      if (role !== 'admin') {
-        router.replace('/home'); // Redirect non-admins
+    const fetchUserTheme = async () => {
+      try {
+        const userDataJson = await AsyncStorage.getItem("userData");
+        const localData = userDataJson ? JSON.parse(userDataJson) : null;
+        const userEmail = localData?.email;
+
+        if (!userEmail) {
+          setRole("user");
+          return;
+        }
+
+        setEmail(userEmail);
+        const userDocRef = doc(firestoreDb, "userdata", userEmail);
+
+        const unsub = onSnapshot(userDocRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const { role: roleFromDb, isDark: themeFromDb } = docSnap.data();
+            setRole(roleFromDb || "user");
+            setIsDark(themeFromDb === true);
+          } else {
+            setRole("user");
+          }
+        });
+
+        return () => unsub();
+      } catch (err) {
+        console.error("Error loading user data:", err);
+        setRole("user");
       }
     };
 
-    checkAdmin();
+    fetchUserTheme();
   }, []);
 
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        center: {
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          padding: 20,
+          backgroundColor: isDark ? "#121212" : "#fff",
+        },
+        container: {
+          flex: 1,
+          padding: 20,
+          backgroundColor: isDark ? "#121212" : "#f0f0f0",
+        },
+        header: {
+          fontSize: 24,
+          fontWeight: "bold",
+          marginBottom: 20,
+          textAlign: "center",
+          color: isDark ? "#fff" : "#000",
+        },
+        table: {
+          borderWidth: 1,
+          borderColor: "#ccc",
+          borderRadius: 5,
+          overflow: "hidden",
+        },
+        row: {
+          flexDirection: "row",
+          borderBottomWidth: 1,
+          borderBottomColor: "#ccc",
+        },
+        evenRow: {
+          backgroundColor: isDark ? "#1e1e1e" : "#f9f9f9",
+        },
+        oddRow: {
+          backgroundColor: isDark ? "#2b2b2b" : "#fff",
+        },
+        cell: {
+          flex: 1,
+          padding: 10,
+          textAlign: "center",
+          fontSize: 16,
+          color: isDark ? "#fff" : "#000",
+        },
+        headerCell: {
+          fontWeight: "bold",
+          backgroundColor: "#4CAF50",
+          color: "#fff",
+          fontSize: 18,
+        },
+        buttonContainer: {
+          flexDirection: "row",
+          justifyContent: "space-around",
+          marginVertical: 20,
+        },
+        pdfButton: {
+          backgroundColor: "red",
+          paddingVertical: 15,
+          paddingHorizontal: 25,
+          borderRadius: 10,
+        },
+        pdfButtonText: {
+          color: "white",
+          fontSize: 16,
+          fontWeight: "bold",
+        },
+        clearButton: {
+          backgroundColor: "blue",
+          paddingVertical: 15,
+          paddingHorizontal: 25,
+          borderRadius: 10,
+        },
+        clearButtonText: {
+          color: "white",
+          fontSize: 16,
+          fontWeight: "bold",
+        },
+      }),
+    [isDark]
+  );
 
   const fetchLocations = useCallback(async () => {
     setRefreshing(true);
@@ -49,32 +172,19 @@ export default function Stats() {
       const updatedLocations = await Promise.all(
         locations.map(async (location) => {
           const locationRef = doc(firestoreDb, "Locations", location.stopName);
-          await updateDoc(locationRef, { time: null }); // Clear time on the server
-          return { ...location, time: null }; // Clear time locally
+          await updateDoc(locationRef, { time: null });
+          return { ...location, time: null };
         })
       );
       setLocations(updatedLocations);
     } catch (error) {
-      console.error("Error clearing stats on the server:", error);
+      console.error("Error clearing stats:", error);
     }
   };
 
   useEffect(() => {
-    fetchLocations();
-  }, [fetchLocations]);
-
-  const renderItem = ({ item, index }) => (
-    <View
-      style={[
-        styles.row,
-        index % 2 === 0 ? styles.evenRow : styles.oddRow, // Alternate row colors
-      ]}
-    >
-      <Text style={styles.cell}>{item.serialNumber?.toString()}</Text>
-      <Text style={styles.cell}>{item.stopName}</Text>
-      <Text style={styles.cell}>{item.time}</Text>
-    </View>
-  );
+    if (role === "admin") fetchLocations();
+  }, [fetchLocations, role]);
 
   const generatePdf = async () => {
     try {
@@ -82,30 +192,16 @@ export default function Stats() {
         <html>
           <head>
             <style>
-              table {
-                width: 100%;
-                border-collapse: collapse;
-              }
-              th, td {
-                border: 1px solid black;
-                padding: 8px;
-                text-align: center;
-              }
-              th {
-                background-color: #4CAF50;
-                color: white;
-              }
+              table { width: 100%; border-collapse: collapse; }
+              th, td { border: 1px solid black; padding: 8px; text-align: center; }
+              th { background-color: #4CAF50; color: white; }
             </style>
           </head>
           <body>
             <h1 style="text-align: center;">Bus Stop Stats</h1>
             <table>
               <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Stop Name</th>
-                  <th>Time</th>
-                </tr>
+                <tr><th>#</th><th>Stop Name</th><th>Time</th></tr>
               </thead>
               <tbody>
                 ${locations
@@ -127,20 +223,51 @@ export default function Stats() {
       const { uri } = await Print.printToFileAsync({ html: htmlContent });
       const pdfUri = `${FileSystem.documentDirectory}BusStopStats.pdf`;
       await FileSystem.moveAsync({ from: uri, to: pdfUri });
-      console.log("PDF saved at:", pdfUri); // Print the file path
       await Sharing.shareAsync(pdfUri);
     } catch (error) {
       console.error("Error generating PDF:", error);
     }
   };
 
+  // 🔄 Loading
+  if (role === null) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="green" />
+      </View>
+    );
+  }
+
+  // 🚫 Not admin
+  if (role !== "admin") {
+    return (
+      <View style={styles.center}>
+        <Text style={{ fontSize: 20, fontWeight: "bold", color: "red" }}>
+          ❌ You're a user. None of your business 😎
+        </Text>
+      </View>
+    );
+  }
+
+  // ✅ Admin view
   return (
     <>
       <FlatList
         style={styles.container}
         data={locations}
-        keyExtractor={(item, index) => `${item.serialNumber?.toString()}-${index}`}
-        renderItem={renderItem}
+        keyExtractor={(item, index) => `${item.serialNumber}-${index}`}
+        renderItem={({ item, index }) => (
+          <View
+            style={[
+              styles.row,
+              index % 2 === 0 ? styles.evenRow : styles.oddRow,
+            ]}
+          >
+            <Text style={styles.cell}>{item.serialNumber}</Text>
+            <Text style={styles.cell}>{item.stopName}</Text>
+            <Text style={styles.cell}>{item.time}</Text>
+          </View>
+        )}
         ListHeaderComponent={
           <>
             <Text style={styles.header}>Bus Stop Stats</Text>
@@ -156,7 +283,7 @@ export default function Stats() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={fetchLocations} />
         }
-        contentContainerStyle={styles.scrollContent} // Add padding at the bottom
+        contentContainerStyle={{ paddingBottom: 20 }}
       />
       <View style={styles.buttonContainer}>
         <TouchableOpacity style={styles.pdfButton} onPress={generatePdf}>
@@ -169,78 +296,3 @@ export default function Stats() {
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-    backgroundColor: "#f0f0f0",
-  },
-  header: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 20,
-    textAlign: "center",
-  },
-  table: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 5,
-    overflow: "hidden",
-  },
-  row: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: "#ccc",
-  },
-  evenRow: {
-    backgroundColor: "#f9f9f9", // Light background for even rows
-  },
-  oddRow: {
-    backgroundColor: "#ffffff", // White background for odd rows
-  },
-  cell: {
-    flex: 1,
-    padding: 10,
-    textAlign: "center",
-    fontSize: 16, // Slightly larger font
-  },
-  headerCell: {
-    fontWeight: "bold",
-    backgroundColor: "#4CAF50", // Green header background
-    color: "#fff", // White text for header
-    fontSize: 18, // Larger font for header
-  },
-  scrollContent: {
-    paddingBottom: 20, // Add padding at the bottom
-  },
-  buttonContainer: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginVertical: 20,
-  },
-  pdfButton: {
-    backgroundColor: "red",
-    paddingVertical: 15,
-    paddingHorizontal: 25,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  pdfButtonText: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  clearButton: {
-    backgroundColor: "blue", // Blue background for clear button
-    paddingVertical: 15,
-    paddingHorizontal: 25,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  clearButtonText: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-});
