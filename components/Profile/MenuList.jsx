@@ -24,6 +24,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { firestoreDb } from '../../configs/FirebaseConfigs';
 import { Colors } from '../../constants/Colors';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function MenuList({ isDark }) {
   const { signOut } = useAuth();
@@ -102,9 +103,14 @@ export default function MenuList({ isDark }) {
     animateItem(index);
     
     // Handle menu actions with a slight delay for animation
-    setTimeout(() => {
+    setTimeout(async () => {
       if (item.path === 'logout') {
-        signOut();
+        try {
+          await AsyncStorage.clear(); // Clear all stored data
+          await signOut();
+        } catch (error) {
+          console.error('Error during logout:', error);
+        }
         return;
       }
       if (item.path === 'share') {

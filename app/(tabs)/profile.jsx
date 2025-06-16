@@ -15,6 +15,7 @@ import Animated, {
 import MenuList from '../../components/Profile/MenuList';
 import ThemeToggleSwitch from '../../components/usefulComponent/ThemeToggleSwitch';
 
+
 export default function Profile() {
   const [userEmail, setUserEmail] = useState(null);
   const [userName, setUserName] = useState('');

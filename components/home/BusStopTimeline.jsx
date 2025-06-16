@@ -20,7 +20,7 @@ import {
   sendLocalNotification 
 } from "../../utils/notificationHelper";
 
-const VerticalStopsComponent = () => {
+const VerticalStopsComponent = (props) => {
   const [stops, setStops] = useState([]);
   const [currentLocation, setCurrentLocation] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -31,22 +31,27 @@ const VerticalStopsComponent = () => {
   const slideAnim = useRef(new Animated.Value(20)).current;
 
   useEffect(() => {
-    // Start fade-in animation when component mounts
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      })
-    ]).start();
+    // Use a small delay to avoid conflict with layout animations
+    const animationTimeout = setTimeout(() => {
+      // Start fade-in animation when component mounts
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 600,
+          useNativeDriver: true,
+        })
+      ]).start();
+    }, 100);
 
     // Initialize notifications using our helper
     initializeNotifications(__DEV__);
+    
+    return () => clearTimeout(animationTimeout);
   }, []);
 
   // ✅ Normalize GPS data keys
@@ -149,7 +154,24 @@ const VerticalStopsComponent = () => {
               ]).start();
 
               Alert.alert("✅ The bus has reached:", `${stop.documentName} at ${formattedTime}`);
-              sendLocalNotification("Bus Arrival", `The bus has reached ${stop.documentName} at ${formattedTime}`);
+              
+              // Send notification with additional data for deep linking
+              sendLocalNotification(
+                "Bus Arrival", 
+                `The bus has reached ${stop.documentName} at ${formattedTime}`,
+                {
+                  data: {
+                    stopName: stop.documentName,
+                    time: formattedTime,
+                    stopId: stop.id,
+                    screen: 'map'
+                  },
+                  // Schedule notification to ensure it appears in system tray
+                  trigger: { 
+                    seconds: 1 
+                  }
+                }
+              );
 
               return {
                 ...stop,
@@ -178,9 +200,20 @@ const VerticalStopsComponent = () => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.PRIMARY} />
-        <Text style={styles.loadingText}>Loading bus stops...</Text>
+      <View style={[
+        styles.loadingContainer,
+        props.isDark && styles.loadingContainerDark
+      ]}>
+        <ActivityIndicator 
+          size="large" 
+          color={props.isDark ? Colors.LIGHT : Colors.PRIMARY} 
+        />
+        <Text style={[
+          styles.loadingText,
+          props.isDark && styles.loadingTextDark
+        ]}>
+          Loading bus stops...
+        </Text>
       </View>
     );
   }
@@ -195,42 +228,73 @@ const VerticalStopsComponent = () => {
     <Animated.View 
       style={[
         styles.mainContainer,
-        { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
+        { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+        props.isDark && styles.mainContainerDark
       ]}
     >
       {/* Timeline Summary */}
-      <View style={styles.summaryContainer}>
+      <View style={[
+        styles.summaryContainer,
+        props.isDark && styles.summaryContainerDark
+      ]}>
         <View style={styles.summaryItem}>
-          <View style={[styles.summaryIcon, { backgroundColor: 'rgba(40, 167, 69, 0.1)' }]}>
+          <View style={[
+            styles.summaryIcon, 
+            { backgroundColor: props.isDark ? 'rgba(40, 167, 69, 0.2)' : 'rgba(40, 167, 69, 0.1)' }
+          ]}>
             <MaterialIcons name="check-circle" size={20} color={Colors.SUCCESS} />
           </View>
           <View>
-            <Text style={styles.summaryLabel}>Completed</Text>
-            <Text style={styles.summaryValue}>
+            <Text style={[
+              styles.summaryLabel,
+              props.isDark && styles.summaryLabelDark
+            ]}>Completed</Text>
+            <Text style={[
+              styles.summaryValue,
+              props.isDark && styles.summaryValueDark
+            ]}>
               {stops.filter(stop => stop.reached).length} stops
             </Text>
           </View>
         </View>
         
         <View style={styles.summaryItem}>
-          <View style={[styles.summaryIcon, { backgroundColor: 'rgba(255, 193, 7, 0.1)' }]}>
+          <View style={[
+            styles.summaryIcon, 
+            { backgroundColor: props.isDark ? 'rgba(255, 193, 7, 0.2)' : 'rgba(255, 193, 7, 0.1)' }
+          ]}>
             <MaterialIcons name="directions-bus" size={20} color={Colors.WARNING} />
           </View>
           <View>
-            <Text style={styles.summaryLabel}>Next Stop</Text>
-            <Text style={styles.summaryValue} numberOfLines={1}>
+            <Text style={[
+              styles.summaryLabel,
+              props.isDark && styles.summaryLabelDark
+            ]}>Next Stop</Text>
+            <Text style={[
+              styles.summaryValue,
+              props.isDark && styles.summaryValueDark
+            ]} numberOfLines={1}>
               {nextStopIndex < stops.length ? stops[nextStopIndex].documentName : 'N/A'}
             </Text>
           </View>
         </View>
         
         <View style={styles.summaryItem}>
-          <View style={[styles.summaryIcon, { backgroundColor: 'rgba(108, 117, 125, 0.1)' }]}>
-            <MaterialIcons name="schedule" size={20} color={Colors.GREY} />
+          <View style={[
+            styles.summaryIcon, 
+            { backgroundColor: props.isDark ? 'rgba(108, 117, 125, 0.2)' : 'rgba(108, 117, 125, 0.1)' }
+          ]}>
+            <MaterialIcons name="schedule" size={20} color={props.isDark ? '#a0a0a0' : Colors.GREY} />
           </View>
           <View>
-            <Text style={styles.summaryLabel}>Remaining</Text>
-            <Text style={styles.summaryValue}>
+            <Text style={[
+              styles.summaryLabel,
+              props.isDark && styles.summaryLabelDark
+            ]}>Remaining</Text>
+            <Text style={[
+              styles.summaryValue,
+              props.isDark && styles.summaryValueDark
+            ]}>
               {stops.filter(stop => !stop.reached).length} stops
             </Text>
           </View>
@@ -238,7 +302,10 @@ const VerticalStopsComponent = () => {
       </View>
 
       {/* Timeline */}
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView contentContainerStyle={[
+        styles.container,
+        props.isDark && styles.containerDark
+      ]}>
         <View style={styles.timeline}>
           {stops.map((stop, index) => {
             // Determine the stop's status
@@ -281,18 +348,42 @@ const VerticalStopsComponent = () => {
                     onPress={() => toggleExpandStop(stop.documentName)}
                     activeOpacity={0.7}
                   >
-                    <View style={styles.stopCard}>
-                      <Text style={[styles.stopName, textStyle]} numberOfLines={isExpanded ? 10 : 1}>
+                    <View style={[
+                      styles.stopCard,
+                      props.isDark && styles.stopCardDark
+                    ]}>
+                      <Text 
+                        style={[
+                          styles.stopName, 
+                          textStyle,
+                          props.isDark && styles.stopNameDark,
+                          props.isDark && stop.reached && styles.textReachedDark,
+                          props.isDark && !stop.reached && index > 0 && stops[index - 1].reached && styles.textNextDark
+                        ]} 
+                        numberOfLines={isExpanded ? 10 : 1}
+                      >
                         {stop.documentName}
                       </Text>
                       {stop.reached && (
                         <View style={styles.reachedInfo}>
-                          <MaterialIcons name="access-time" size={14} color={Colors.SUCCESS} />
-                          <Text style={styles.reachedTimeText}>{stop.reachedTime}</Text>
+                          <MaterialIcons 
+                            name="access-time" 
+                            size={14} 
+                            color={props.isDark ? '#4caf50' : Colors.SUCCESS} 
+                          />
+                          <Text style={[
+                            styles.reachedTimeText,
+                            props.isDark && styles.reachedTimeTextDark
+                          ]}>
+                            {stop.reachedTime}
+                          </Text>
                         </View>
                       )}
                       {!stop.reached && (
-                        <Text style={styles.pendingText}>
+                        <Text style={[
+                          styles.pendingText,
+                          props.isDark && styles.pendingTextDark
+                        ]}>
                           {index > 0 && stops[index - 1].reached ? "Next stop" : "Pending"}
                         </Text>
                       )}
@@ -304,6 +395,7 @@ const VerticalStopsComponent = () => {
                 <View style={styles.centralLine}>
                   <View style={[
                     styles.verticalLine,
+                    props.isDark && styles.verticalLineDark,
                     index === 0 && styles.firstVerticalLine,
                     index === stops.length - 1 && styles.lastVerticalLine
                   ]} />
@@ -312,6 +404,9 @@ const VerticalStopsComponent = () => {
                     style={[
                       styles.dot, 
                       dotStyle,
+                      props.isDark && stop.reached && styles.dotReachedDark,
+                      props.isDark && !stop.reached && index > 0 && stops[index - 1].reached && styles.dotNextDark,
+                      props.isDark && !stop.reached && !(index > 0 && stops[index - 1].reached) && styles.dotNotReachedDark,
                       { transform: [{ scale: dotScale }] }
                     ]}
                   >
@@ -319,8 +414,16 @@ const VerticalStopsComponent = () => {
                   </Animated.View>
                   
                   {stop.reached && (
-                    <View style={styles.timeIndicator}>
-                      <Text style={styles.timeText}>{stop.reachedTime}</Text>
+                    <View style={[
+                      styles.timeIndicator,
+                      props.isDark && styles.timeIndicatorDark
+                    ]}>
+                      <Text style={[
+                        styles.timeText,
+                        props.isDark && styles.timeTextDark
+                      ]}>
+                        {stop.reachedTime}
+                      </Text>
                     </View>
                   )}
                 </View>
@@ -332,18 +435,42 @@ const VerticalStopsComponent = () => {
                     onPress={() => toggleExpandStop(stop.documentName)}
                     activeOpacity={0.7}
                   >
-                    <View style={styles.stopCard}>
-                      <Text style={[styles.stopName, textStyle]} numberOfLines={isExpanded ? 10 : 1}>
+                    <View style={[
+                      styles.stopCard,
+                      props.isDark && styles.stopCardDark
+                    ]}>
+                      <Text 
+                        style={[
+                          styles.stopName, 
+                          textStyle,
+                          props.isDark && styles.stopNameDark,
+                          props.isDark && stop.reached && styles.textReachedDark,
+                          props.isDark && !stop.reached && index > 0 && stops[index - 1].reached && styles.textNextDark
+                        ]} 
+                        numberOfLines={isExpanded ? 10 : 1}
+                      >
                         {stop.documentName}
                       </Text>
                       {stop.reached && (
                         <View style={styles.reachedInfo}>
-                          <MaterialIcons name="access-time" size={14} color={Colors.SUCCESS} />
-                          <Text style={styles.reachedTimeText}>{stop.reachedTime}</Text>
+                          <MaterialIcons 
+                            name="access-time" 
+                            size={14} 
+                            color={props.isDark ? '#4caf50' : Colors.SUCCESS} 
+                          />
+                          <Text style={[
+                            styles.reachedTimeText,
+                            props.isDark && styles.reachedTimeTextDark
+                          ]}>
+                            {stop.reachedTime}
+                          </Text>
                         </View>
                       )}
                       {!stop.reached && (
-                        <Text style={styles.pendingText}>
+                        <Text style={[
+                          styles.pendingText,
+                          props.isDark && styles.pendingTextDark
+                        ]}>
                           {index > 0 && stops[index - 1].reached ? "Next stop" : "Pending"}
                         </Text>
                       )}
@@ -363,9 +490,15 @@ const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
   },
+  mainContainerDark: {
+    backgroundColor: '#121212',
+  },
   container: {
     paddingVertical: 10,
     backgroundColor: Colors.WHITE,
+  },
+  containerDark: {
+    backgroundColor: '#1e1e1e',
   },
   summaryContainer: {
     flexDirection: 'row',
@@ -379,6 +512,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 3,
     elevation: 2,
+  },
+  summaryContainerDark: {
+    backgroundColor: '#2a2a2a',
+    shadowOpacity: 0.2,
   },
   summaryItem: {
     flexDirection: 'row',
@@ -397,11 +534,17 @@ const styles = StyleSheet.create({
     color: Colors.GREY,
     marginBottom: 2,
   },
+  summaryLabelDark: {
+    color: '#a0a0a0',
+  },
   summaryValue: {
     fontSize: 14,
     fontWeight: '600',
     color: Colors.DARK,
     maxWidth: 90,
+  },
+  summaryValueDark: {
+    color: Colors.WHITE,
   },
   timeline: {
     flexDirection: "column",
@@ -439,10 +582,17 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 1,
   },
+  stopCardDark: {
+    backgroundColor: '#2a2a2a',
+    shadowOpacity: 0.2,
+  },
   stopName: {
     fontSize: 14,
     fontWeight: '500',
     marginBottom: 4,
+  },
+  stopNameDark: {
+    color: '#e0e0e0',
   },
   reachedInfo: {
     flexDirection: 'row',
@@ -454,10 +604,16 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     fontWeight: '500',
   },
+  reachedTimeTextDark: {
+    color: '#4caf50',
+  },
   pendingText: {
     fontSize: 12,
     color: Colors.GREY,
     fontStyle: 'italic',
+  },
+  pendingTextDark: {
+    color: '#a0a0a0',
   },
   centralLine: {
     alignItems: "center",
@@ -471,6 +627,9 @@ const styles = StyleSheet.create({
     height: "200%",
     backgroundColor: Colors.LIGHT_GREY,
     zIndex: -1,
+  },
+  verticalLineDark: {
+    backgroundColor: '#444',
   },
   firstVerticalLine: {
     top: '50%',
@@ -497,11 +656,20 @@ const styles = StyleSheet.create({
   dotReached: {
     backgroundColor: Colors.SUCCESS,
   },
+  dotReachedDark: {
+    backgroundColor: '#4caf50',
+  },
   dotNotReached: {
     backgroundColor: Colors.GREY,
   },
+  dotNotReachedDark: {
+    backgroundColor: '#555',
+  },
   dotNext: {
     backgroundColor: Colors.WARNING,
+  },
+  dotNextDark: {
+    backgroundColor: '#e6a800',
   },
   timeIndicator: {
     backgroundColor: 'rgba(40, 167, 69, 0.1)',
@@ -510,10 +678,16 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginTop: 4,
   },
+  timeIndicatorDark: {
+    backgroundColor: 'rgba(40, 167, 69, 0.2)',
+  },
   timeText: {
     fontSize: 10,
     color: Colors.SUCCESS,
     fontWeight: '600',
+  },
+  timeTextDark: {
+    color: '#4caf50',
   },
   loadingContainer: {
     flex: 1,
@@ -521,19 +695,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 40,
   },
+  loadingContainerDark: {
+    backgroundColor: '#1e1e1e',
+  },
   loadingText: {
     fontSize: 16,
     color: Colors.GREY,
     marginTop: 12,
   },
+  loadingTextDark: {
+    color: '#a0a0a0',
+  },
   textReached: {
     color: Colors.SUCCESS,
+  },
+  textReachedDark: {
+    color: '#4caf50',
   },
   textNotReached: {
     color: Colors.DARK,
   },
   textNext: {
     color: Colors.WARNING,
+  },
+  textNextDark: {
+    color: '#e6a800',
   },
   textPrevious: {
     color: Colors.LIGHT_GREY,

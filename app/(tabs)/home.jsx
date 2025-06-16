@@ -1,34 +1,79 @@
-import { View, Text, ScrollView, StyleSheet, RefreshControl, Animated, StatusBar, SafeAreaView, TouchableOpacity } from 'react-native'
-import React, { useState, useRef, useEffect } from 'react'
-import Header from '../../components/home/Header'
-import Display from '../../components/home/Display'
+import { Ionicons, MaterialIcons } from '@expo/vector-icons'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { useRouter } from 'expo-router'
+import { doc, onSnapshot } from 'firebase/firestore'
+import { useEffect, useRef, useState } from 'react'
+import { Animated, RefreshControl, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import BusStopTimeline from '../../components/home/BusStopTimeline'
-// import SpeedMonitor from '../../components/home/SpeedMonitor'
+import Header from '../../components/home/Header'
 import UserDataManager from '../../components/usefulComponent/UserDataManager'
+import { firestoreDb } from '../../configs/FirebaseConfigs'
 import { Colors } from '../../constants/Colors'
-import { MaterialIcons, Ionicons } from '@expo/vector-icons'
-import { BlurView } from 'expo-blur'
 
 export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('timeline');
+  const [isDark, setIsDark] = useState(false);
+  const [userEmail, setUserEmail] = useState(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
+  const router = useRouter();
+
+  // Load user theme
+  useEffect(() => {
+    const fetchUserTheme = async () => {
+      try {
+        const userDataJson = await AsyncStorage.getItem('userData');
+        
+        if (!userDataJson) {
+          console.warn('⚠️ userData not found in AsyncStorage');
+          return;
+        }
+        
+        const { email } = JSON.parse(userDataJson);
+        setUserEmail(email);
+        
+        if (!email) {
+          console.warn('⚠️ Email not found inside userData');
+          return;
+        }
+        
+        const userDocRef = doc(firestoreDb, 'userdata', email);
+        const unsub = onSnapshot(userDocRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setIsDark(data.isDark === true);
+          }
+        });
+        
+        return () => unsub();
+      } catch (err) {
+        console.error('Failed to fetch theme:', err);
+      }
+    };
+    
+    fetchUserTheme();
+  }, []);
 
   // Animation when component mounts
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      })
-    ]).start();
+    // Use a small delay to avoid conflict with layout animations
+    const animationTimeout = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 600,
+          useNativeDriver: true,
+        })
+      ]).start();
+    }, 100);
+    
+    return () => clearTimeout(animationTimeout);
   }, []);
 
   const onRefresh = () => {
@@ -37,6 +82,10 @@ export default function Home() {
     setTimeout(() => {
       setRefreshing(false);
     }, 2000);
+  };
+
+  const handleMapViewPress = () => {
+    router.push('/map');
   };
 
   const renderTabContent = () => {
@@ -49,7 +98,7 @@ export default function Home() {
               { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
             ]}
           >
-            <BusStopTimeline />
+            <BusStopTimeline isDark={isDark} />
           </Animated.View>
         );
       case 'map':
@@ -60,9 +109,39 @@ export default function Home() {
               { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
             ]}
           >
-            <View style={styles.comingSoonContainer}>
-              <Ionicons name="map" size={60} color={Colors.PRIMARY} />
-              <Text style={styles.comingSoonText}>Map View Coming Soon</Text>
+            <TouchableOpacity 
+              style={styles.mapViewButton}
+              onPress={handleMapViewPress}
+              activeOpacity={0.8}
+            >
+              <View style={styles.mapIconContainer}>
+                <Ionicons name="map" size={40} color={Colors.WHITE} />
+              </View>
+              <Text style={styles.mapViewButtonText}>Open Full Map View</Text>
+              <MaterialIcons name="arrow-forward" size={24} color={isDark ? Colors.WHITE : Colors.PRIMARY} />
+            </TouchableOpacity>
+            
+            <View style={[styles.mapInfoContainer, isDark && styles.mapInfoContainerDark]}>
+              <View style={styles.mapInfoItem}>
+                <MaterialIcons name="location-on" size={24} color={isDark ? Colors.LIGHT : Colors.SECONDARY} />
+                <Text style={[styles.mapInfoText, isDark && styles.textDark]}>
+                  View real-time bus location
+                </Text>
+              </View>
+              
+              <View style={styles.mapInfoItem}>
+                <MaterialIcons name="directions" size={24} color={isDark ? Colors.LIGHT : Colors.SECONDARY} />
+                <Text style={[styles.mapInfoText, isDark && styles.textDark]}>
+                  Track all bus stops on the map
+                </Text>
+              </View>
+              
+              <View style={styles.mapInfoItem}>
+                <MaterialIcons name="zoom-in-map" size={24} color={isDark ? Colors.LIGHT : Colors.SECONDARY} />
+                <Text style={[styles.mapInfoText, isDark && styles.textDark]}>
+                  Zoom and pan for detailed view
+                </Text>
+              </View>
             </View>
           </Animated.View>
         );
@@ -72,12 +151,15 @@ export default function Home() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.PRIMARY} />
+    <SafeAreaView style={[
+      styles.container, 
+      isDark && styles.containerDark
+    ]}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={isDark ? Colors.dark.background : Colors.PRIMARY} />
       <UserDataManager />
       
       {/* Header Section */}
-      <Header />
+      <Header isDark={isDark} />
       
       {/* Main Content */}
       <ScrollView
@@ -87,7 +169,7 @@ export default function Home() {
             refreshing={refreshing} 
             onRefresh={onRefresh}
             colors={[Colors.PRIMARY, Colors.SECONDARY]} 
-            tintColor={Colors.PRIMARY}
+            tintColor={isDark ? Colors.WHITE : Colors.PRIMARY}
           />
         }
       >
@@ -95,11 +177,12 @@ export default function Home() {
         <Animated.View 
           style={[
             styles.contentCard,
+            isDark && styles.contentCardDark,
             { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
           ]}
         >
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Bus Tracking</Text>
+          <View style={[styles.cardHeader, isDark && styles.cardHeaderDark]}>
+            <Text style={[styles.cardTitle, isDark && styles.textDark]}>Bus Tracking</Text>
             <View style={styles.statusIndicator}>
               <View style={styles.statusDot} />
               <Text style={styles.statusText}>Live</Text>
@@ -107,36 +190,56 @@ export default function Home() {
           </View>
           
           {/* Tab Navigation */}
-          <View style={styles.tabContainer}>
+          <View style={[styles.tabContainer, isDark && styles.tabContainerDark]}>
             <TouchableOpacity 
-              style={[styles.tabButton, activeTab === 'timeline' && styles.activeTab]}
+              style={[
+                styles.tabButton, 
+                activeTab === 'timeline' && styles.activeTab,
+                activeTab === 'timeline' && isDark && styles.activeTabDark
+              ]}
               onPress={() => setActiveTab('timeline')}
             >
               <MaterialIcons 
                 name="timeline" 
                 size={24} 
-                color={activeTab === 'timeline' ? Colors.PRIMARY : Colors.GRAY} 
+                color={
+                  activeTab === 'timeline' 
+                    ? (isDark ? Colors.LIGHT : Colors.PRIMARY) 
+                    : (isDark ? '#6c757d' : Colors.GRAY)
+                } 
               />
               <Text style={[
                 styles.tabText, 
-                activeTab === 'timeline' && styles.activeTabText
+                isDark && styles.tabTextDark,
+                activeTab === 'timeline' && styles.activeTabText,
+                activeTab === 'timeline' && isDark && styles.activeTabTextDark
               ]}>
                 Timeline
               </Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={[styles.tabButton, activeTab === 'map' && styles.activeTab]}
+              style={[
+                styles.tabButton, 
+                activeTab === 'map' && styles.activeTab,
+                activeTab === 'map' && isDark && styles.activeTabDark
+              ]}
               onPress={() => setActiveTab('map')}
             >
               <MaterialIcons 
                 name="map" 
                 size={24} 
-                color={activeTab === 'map' ? Colors.PRIMARY : Colors.GRAY} 
+                color={
+                  activeTab === 'map' 
+                    ? (isDark ? Colors.LIGHT : Colors.PRIMARY) 
+                    : (isDark ? '#6c757d' : Colors.GRAY)
+                } 
               />
               <Text style={[
                 styles.tabText, 
-                activeTab === 'map' && styles.activeTabText
+                isDark && styles.tabTextDark,
+                activeTab === 'map' && styles.activeTabText,
+                activeTab === 'map' && isDark && styles.activeTabTextDark
               ]}>
                 Map View
               </Text>
@@ -156,6 +259,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
+  containerDark: {
+    backgroundColor: '#121212',
+  },
   scrollViewContent: {
     padding: 16,
     paddingBottom: 100,
@@ -171,6 +277,11 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
+  contentCardDark: {
+    backgroundColor: '#1e1e1e',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+  },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -179,10 +290,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
+  cardHeaderDark: {
+    borderBottomColor: '#333',
+  },
   cardTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: Colors.DARK,
+  },
+  textDark: {
+    color: Colors.WHITE,
   },
   statusIndicator: {
     flexDirection: 'row',
@@ -209,6 +326,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
+  tabContainerDark: {
+    borderBottomColor: '#333',
+  },
   tabButton: {
     flex: 1,
     flexDirection: 'row',
@@ -221,27 +341,74 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: Colors.PRIMARY,
   },
+  activeTabDark: {
+    borderBottomColor: Colors.LIGHT,
+  },
   tabText: {
     fontSize: 14,
     color: Colors.GRAY,
+  },
+  tabTextDark: {
+    color: '#6c757d',
   },
   activeTabText: {
     color: Colors.PRIMARY,
     fontWeight: '600',
   },
+  activeTabTextDark: {
+    color: Colors.LIGHT,
+  },
   tabContent: {
     minHeight: 400,
   },
-  comingSoonContainer: {
-    flex: 1,
+  mapViewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.PRIMARY,
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 16,
+    marginTop: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 6,
+  },
+  mapIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
   },
-  comingSoonText: {
-    marginTop: 16,
+  mapViewButtonText: {
+    flex: 1,
+    color: Colors.WHITE,
     fontSize: 18,
+    fontWeight: 'bold',
+    marginLeft: 16,
+  },
+  mapInfoContainer: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 16,
+    margin: 16,
+    marginTop: 24,
+  },
+  mapInfoContainerDark: {
+    backgroundColor: '#2a2a2a',
+  },
+  mapInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  mapInfoText: {
+    fontSize: 16,
     color: Colors.DARK,
-    textAlign: 'center',
+    marginLeft: 12,
   },
 })

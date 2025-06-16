@@ -20,33 +20,39 @@ export default function UserDataManager() {
         const image = user.imageUrl;
         const role = await AsyncStorage.getItem('userRole') || 'user';
 
-        // 👉 Check if user doc already exists
         const userRef = doc(db, 'userdata', email);
         const docSnap = await getDoc(userRef);
 
+        const userData = {
+          name,
+          email,
+          image,
+          role,
+          isDark: false,
+          lastUpdated: serverTimestamp(),
+        };
+
         if (!docSnap.exists()) {
-          const userData = {
-            name,
-            email,
-            image,
-            role,
-            isDark: false, // Default only at first time
-            createdAt: serverTimestamp(),
-          };
-
-          // Save to Firestore
-          await setDoc(userRef, userData);
-
-          // Save locally
-          await AsyncStorage.setItem('userData', JSON.stringify({
-            ...userData,
-            createdAt: new Date().toISOString(), // Optional local time
-          }));
-
-          console.log('✅ User data created and saved to AsyncStorage');
+          userData.createdAt = serverTimestamp();
         } else {
-          console.log('ℹ️ User data already exists — skipping overwrite');
+          // Keep existing data, just update necessary fields
+          const existingData = docSnap.data();
+          userData.isDark = existingData.isDark;
+          userData.createdAt = existingData.createdAt;
         }
+
+        // Save to Firestore
+        await setDoc(userRef, userData, { merge: true });
+
+        // Save to AsyncStorage
+        const localUserData = {
+          ...userData,
+          lastUpdated: new Date().toISOString(),
+          createdAt: userData.createdAt ? new Date().toISOString() : new Date().toISOString(),
+        };
+        
+        await AsyncStorage.setItem('userData', JSON.stringify(localUserData));
+        console.log('✅ User data saved to AsyncStorage:', localUserData);
 
         clearInterval(interval);
       } catch (err) {

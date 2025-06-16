@@ -1,28 +1,33 @@
-import { Text, StyleSheet, View, Image, TouchableOpacity, Animated } from 'react-native'
-import React, { useEffect, useRef } from 'react'
 import { useUser } from '@clerk/clerk-expo'
-import { Colors } from '../../constants/Colors'
 import { Ionicons, MaterialIcons } from '@expo/vector-icons'
-import { BlurView } from 'expo-blur'
+import { LinearGradient } from 'expo-linear-gradient'
+import { useEffect, useRef } from 'react'
+import { Animated, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { Colors } from '../../constants/Colors'
 
-export default function Header() {
+export default function Header({ isDark = false }) {
   const { user } = useUser();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-20)).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      })
-    ]).start();
+    // Use a small delay to avoid conflict with layout animations
+    const animationTimeout = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 600,
+          useNativeDriver: true,
+        })
+      ]).start();
+    }, 100);
+    
+    return () => clearTimeout(animationTimeout);
   }, []);
 
   const currentTime = new Date();
@@ -35,8 +40,18 @@ export default function Header() {
     greeting = "Good Evening";
   }
 
+  // Define gradient colors based on theme
+  const gradientColors = isDark 
+    ? ['#1a1a2e', '#16213e', '#0f3460'] 
+    : [Colors.PRIMARY, '#0a5a8f', '#064273'];
+
   return (
-    <View style={styles.headerContainer}>
+    <LinearGradient 
+      colors={gradientColors}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.headerContainer}
+    >
       <Animated.View 
         style={[
           styles.headerContent,
@@ -60,36 +75,59 @@ export default function Header() {
         </View>
 
         {/* Quick Actions */}
-        <View style={styles.quickActionsContainer}>
+        <View style={[
+          styles.quickActionsContainer,
+          isDark && styles.quickActionsContainerDark
+        ]}>
           <TouchableOpacity style={styles.actionButton}>
-            <View style={styles.actionIconContainer}>
-              <Ionicons name="notifications-outline" size={22} color={Colors.PRIMARY} />
+            <View style={[
+              styles.actionIconContainer,
+              isDark && styles.actionIconContainerDark
+            ]}>
+              <Ionicons 
+                name="notifications-outline" 
+                size={22} 
+                color={isDark ? Colors.LIGHT : Colors.PRIMARY} 
+              />
             </View>
             <Text style={styles.actionText}>Alerts</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.actionButton}>
-            <View style={styles.actionIconContainer}>
-              <MaterialIcons name="location-on" size={22} color={Colors.PRIMARY} />
+            <View style={[
+              styles.actionIconContainer,
+              isDark && styles.actionIconContainerDark
+            ]}>
+              <MaterialIcons 
+                name="location-on" 
+                size={22} 
+                color={isDark ? Colors.LIGHT : Colors.PRIMARY} 
+              />
             </View>
             <Text style={styles.actionText}>Locations</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.actionButton}>
-            <View style={styles.actionIconContainer}>
-              <Ionicons name="time-outline" size={22} color={Colors.PRIMARY} />
+            <View style={[
+              styles.actionIconContainer,
+              isDark && styles.actionIconContainerDark
+            ]}>
+              <Ionicons 
+                name="time-outline" 
+                size={22} 
+                color={isDark ? Colors.LIGHT : Colors.PRIMARY} 
+              />
             </View>
             <Text style={styles.actionText}>Schedule</Text>
           </TouchableOpacity>
         </View>
       </Animated.View>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   headerContainer: {
-    backgroundColor: Colors.PRIMARY,
     paddingTop: 50,
     paddingBottom: 30,
     borderBottomLeftRadius: 30,
@@ -151,6 +189,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 12,
   },
+  quickActionsContainerDark: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
   actionButton: {
     alignItems: 'center',
     flex: 1,
@@ -163,6 +204,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 6,
+  },
+  actionIconContainerDark: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
   },
   actionText: {
     color: Colors.WHITE,

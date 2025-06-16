@@ -43,3 +43,6 @@ configs/FirebaseConfigs.js
 # Prevent secrets from being pushed
 FirebaseConfigs.js
 *.env
+android
+.vscode
+app.config.js

@@ -100,7 +100,7 @@ useEffect(() => {
   const onPressGoogle = useCallback(async () => {
     try {
       const { createdSessionId, setActive } = await startGoogleOAuthFlow({
-        redirectUrl: Linking.createURL('/home', { scheme: 'myapp' }),
+        redirectUrl: Linking.createURL('/home', { scheme: 'viscous' }),
       });
 
       if (createdSessionId) {
@@ -115,7 +115,7 @@ useEffect(() => {
     if (!startAppleOAuthFlow) return;
     try {
       const { createdSessionId, setActive } = await startAppleOAuthFlow({
-        redirectUrl: Linking.createURL('/home', { scheme: 'myapp' }),
+        redirectUrl: Linking.createURL('/home', { scheme: 'viscous' }),
       });
       if (createdSessionId) {
         await setActive({ session: createdSessionId });
