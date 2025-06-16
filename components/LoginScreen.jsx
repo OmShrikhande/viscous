@@ -1,14 +1,13 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { Colors } from '@/constants/Colors';
-import * as WebBrowser from 'expo-web-browser';
-import {useAuth, useOAuth, useUser } from '@clerk/clerk-expo';
-import * as Linking from 'expo-linking';
 import { useWarmUpBrowser } from '@/hooks/useWarmUpBrowser';
-import { useWindowDimensions } from 'react-native';
+import { useAuth, useOAuth, useUser } from '@clerk/clerk-expo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { firestoreDb as db } from './../configs/FirebaseConfigs';
-import { setDoc, doc, serverTimestamp } from 'firebase/firestore';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -49,14 +48,34 @@ useEffect(() => {
       const email = user.emailAddresses?.[0]?.emailAddress || 'unknown';
       const name = user.fullName || 'No Name';
       const image = user.imageUrl;
-      const role = await AsyncStorage.getItem('userRole') || 'user';
+      
+      // Get role from AsyncStorage or default to 'user'
+      let role = await AsyncStorage.getItem('userRole') || 'user';
+      
+      // Check if user already exists in Firestore and get their role
+      const userDocRef = doc(db, 'userdata', email);
+      const userDoc = await getDoc(userDocRef);
+      
+      if (userDoc.exists()) {
+        // If user exists in Firestore, use their role from there
+        const firestoreRole = userDoc.data().role;
+        if (firestoreRole) {
+          role = firestoreRole;
+          // Update AsyncStorage with the role from Firestore
+          await AsyncStorage.setItem('userRole', firestoreRole);
+          console.log('📝 Updated AsyncStorage role from Firestore:', firestoreRole);
+        }
+      }
+      
+      console.log('👤 User role for login:', role);
 
       const userData = {
         name,
         email,
         image,
-        role,
+        role, // This will be either from Firestore or AsyncStorage
         isDark: false,
+        hasCompletedOnboarding: false, // Flag to check if user has completed the onboarding form
         createdAt: new Date().toISOString(),
       };
 

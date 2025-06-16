@@ -1,23 +1,22 @@
-import React, { useState, useEffect, useRef } from "react";
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  Alert, 
-  Platform, 
-  TouchableOpacity, 
+import { MaterialIcons } from "@expo/vector-icons";
+import { onValue, ref } from "firebase/database";
+import { collection, doc, getDocs, updateDoc } from "firebase/firestore";
+import { useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
   Animated,
-  ActivityIndicator
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from "react-native";
-import { ref, onValue } from "firebase/database";
-import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
-import { realtimeDatabase, firestoreDb } from "../../configs/FirebaseConfigs";
+import { firestoreDb, realtimeDatabase } from "../../configs/FirebaseConfigs";
 import { Colors } from "../../constants/Colors";
-import { MaterialIcons, Ionicons, FontAwesome5 } from "@expo/vector-icons";
-import { 
-  initializeNotifications, 
-  sendLocalNotification 
+import {
+  initializeNotifications,
+  sendLocalNotification
 } from "../../utils/notificationHelper";
 
 const VerticalStopsComponent = (props) => {
@@ -48,8 +47,14 @@ const VerticalStopsComponent = (props) => {
       ]).start();
     }, 100);
 
-    // Initialize notifications using our helper
-    initializeNotifications(__DEV__);
+    // Initialize notifications with background and lock screen support
+    // This ensures notifications work even when app is killed or cleared from app tray
+    initializeNotifications(false).then(hasPermission => {
+      console.log("Notification permissions granted:", hasPermission);
+      if (!hasPermission) {
+        console.warn("User has not granted notification permissions");
+      }
+    });
     
     return () => clearTimeout(animationTimeout);
   }, []);
@@ -155,9 +160,9 @@ const VerticalStopsComponent = (props) => {
 
               Alert.alert("✅ The bus has reached:", `${stop.documentName} at ${formattedTime}`);
               
-              // Send notification with additional data for deep linking
+              // Send high-priority notification that works even when app is killed
               sendLocalNotification(
-                "Bus Arrival", 
+                "🚍 Bus Arrival Alert", 
                 `The bus has reached ${stop.documentName} at ${formattedTime}`,
                 {
                   data: {
@@ -166,10 +171,12 @@ const VerticalStopsComponent = (props) => {
                     stopId: stop.id,
                     screen: 'map'
                   },
-                  // Schedule notification to ensure it appears in system tray
+                  // Use a trigger to ensure it appears in system tray
                   trigger: { 
                     seconds: 1 
-                  }
+                  },
+                  // Make it a clearable notification
+                  badge: 1
                 }
               );
 

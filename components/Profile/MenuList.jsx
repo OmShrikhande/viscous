@@ -1,4 +1,5 @@
 import { useAuth } from '@clerk/clerk-expo';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
@@ -24,7 +25,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import { firestoreDb } from '../../configs/FirebaseConfigs';
 import { Colors } from '../../constants/Colors';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function MenuList({ isDark }) {
   const { signOut } = useAuth();

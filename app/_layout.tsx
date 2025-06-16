@@ -3,10 +3,13 @@ import { useFonts } from "expo-font";
 import { Stack, useRouter } from "expo-router";
 import LoginScreen from "../components/LoginScreen.jsx";
 // import { tokenCache } from '@/cache'
-import * as Notifications from "expo-notifications";
 import * as SecureStore from 'expo-secure-store';
 import { useEffect, useRef } from "react";
-import { addNotificationResponseListener } from "../utils/notificationHelper";
+import OnboardingWrapper from "../components/OnboardingWrapper";
+import {
+  addNotificationReceivedListener,
+  addNotificationResponseListener
+} from "../utils/notificationHelper";
 
 const tokenCache = {
   async getToken(key) {
@@ -33,7 +36,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     // Set up notification listeners when app is in foreground
-    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+    notificationListener.current = addNotificationReceivedListener(notification => {
       console.log('Notification received in foreground:', notification);
     });
 
@@ -56,8 +59,13 @@ export default function RootLayout() {
 
     // Clean up listeners on unmount
     return () => {
-      Notifications.removeNotificationSubscription(notificationListener.current);
-      Notifications.removeNotificationSubscription(responseListener.current);
+      // Remove listeners individually
+      if (notificationListener.current) {
+        notificationListener.current.remove();
+      }
+      if (responseListener.current) {
+        responseListener.current.remove();
+      }
     };
   }, []);
 
@@ -73,10 +81,11 @@ export default function RootLayout() {
    
  
       <SignedIn>
-      <Stack>      
+        <OnboardingWrapper>
+          <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown:false }} />
-      </Stack>
-          
+          </Stack>
+        </OnboardingWrapper>
       </SignedIn>
       
       <SignedOut>

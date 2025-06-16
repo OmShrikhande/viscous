@@ -1,14 +1,22 @@
 import { useUser } from '@clerk/clerk-expo'
 import { Ionicons, MaterialIcons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Animated, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Colors } from '../../constants/Colors'
+import AlertsScreen from './AlertsScreen'
+import LocationsScreen from './LocationsScreen'
+import ScheduleScreen from './ScheduleScreen'
 
 export default function Header({ isDark = false }) {
   const { user } = useUser();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-20)).current;
+  
+  // Modal visibility states
+  const [alertsVisible, setAlertsVisible] = useState(false);
+  const [locationsVisible, setLocationsVisible] = useState(false);
+  const [scheduleVisible, setScheduleVisible] = useState(false);
 
   useEffect(() => {
     // Use a small delay to avoid conflict with layout animations
@@ -46,83 +54,116 @@ export default function Header({ isDark = false }) {
     : [Colors.PRIMARY, '#0a5a8f', '#064273'];
 
   return (
-    <LinearGradient 
-      colors={gradientColors}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.headerContainer}
-    >
-      <Animated.View 
-        style={[
-          styles.headerContent,
-          { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
-        ]}
+    <>
+      <LinearGradient 
+        colors={gradientColors}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerContainer}
       >
-        {/* User Info Section */}
-        <View style={styles.userInfoContainer}>
-          <View style={styles.userDetails}>
-            <Text style={styles.greeting}>{greeting},</Text>
-            <Text style={styles.userName}>{user?.fullName}</Text>
+        <Animated.View 
+          style={[
+            styles.headerContent,
+            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
+          ]}
+        >
+          {/* User Info Section */}
+          <View style={styles.userInfoContainer}>
+            <View style={styles.userDetails}>
+              <Text style={styles.greeting}>{greeting},</Text>
+              <Text style={styles.userName}>{user?.fullName}</Text>
+            </View>
+            
+            <View style={styles.profileImageContainer}>
+              <Image 
+                source={{ uri: user?.imageUrl }} 
+                style={styles.profileImage}
+              />
+              <View style={styles.onlineIndicator} />
+            </View>
           </View>
-          
-          <View style={styles.profileImageContainer}>
-            <Image 
-              source={{ uri: user?.imageUrl }} 
-              style={styles.profileImage}
-            />
-            <View style={styles.onlineIndicator} />
-          </View>
-        </View>
 
-        {/* Quick Actions */}
-        <View style={[
-          styles.quickActionsContainer,
-          isDark && styles.quickActionsContainerDark
-        ]}>
-          <TouchableOpacity style={styles.actionButton}>
-            <View style={[
-              styles.actionIconContainer,
-              isDark && styles.actionIconContainerDark
-            ]}>
-              <Ionicons 
-                name="notifications-outline" 
-                size={22} 
-                color={isDark ? Colors.LIGHT : Colors.PRIMARY} 
-              />
-            </View>
-            <Text style={styles.actionText}>Alerts</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.actionButton}>
-            <View style={[
-              styles.actionIconContainer,
-              isDark && styles.actionIconContainerDark
-            ]}>
-              <MaterialIcons 
-                name="location-on" 
-                size={22} 
-                color={isDark ? Colors.LIGHT : Colors.PRIMARY} 
-              />
-            </View>
-            <Text style={styles.actionText}>Locations</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.actionButton}>
-            <View style={[
-              styles.actionIconContainer,
-              isDark && styles.actionIconContainerDark
-            ]}>
-              <Ionicons 
-                name="time-outline" 
-                size={22} 
-                color={isDark ? Colors.LIGHT : Colors.PRIMARY} 
-              />
-            </View>
-            <Text style={styles.actionText}>Schedule</Text>
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
-    </LinearGradient>
+          {/* Quick Actions */}
+          <View style={[
+            styles.quickActionsContainer,
+            isDark && styles.quickActionsContainerDark
+          ]}>
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => setAlertsVisible(true)}
+              activeOpacity={0.7}
+            >
+              <View style={[
+                styles.actionIconContainer,
+                isDark && styles.actionIconContainerDark
+              ]}>
+                <Ionicons 
+                  name="notifications-outline" 
+                  size={22} 
+                  color={isDark ? Colors.LIGHT : Colors.PRIMARY} 
+                />
+              </View>
+              <Text style={styles.actionText}>Alerts</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => setLocationsVisible(true)}
+              activeOpacity={0.7}
+            >
+              <View style={[
+                styles.actionIconContainer,
+                isDark && styles.actionIconContainerDark
+              ]}>
+                <MaterialIcons 
+                  name="location-on" 
+                  size={22} 
+                  color={isDark ? Colors.LIGHT : Colors.PRIMARY} 
+                />
+              </View>
+              <Text style={styles.actionText}>Locations</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => setScheduleVisible(true)}
+              activeOpacity={0.7}
+            >
+              <View style={[
+                styles.actionIconContainer,
+                isDark && styles.actionIconContainerDark
+              ]}>
+                <Ionicons 
+                  name="time-outline" 
+                  size={22} 
+                  color={isDark ? Colors.LIGHT : Colors.PRIMARY} 
+                />
+              </View>
+              <Text style={styles.actionText}>Schedule</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </LinearGradient>
+
+      {/* Modals for each action */}
+      <AlertsScreen 
+        visible={alertsVisible} 
+        onClose={() => setAlertsVisible(false)} 
+        isDark={isDark} 
+      />
+      
+      <LocationsScreen 
+        visible={locationsVisible} 
+        onClose={() => setLocationsVisible(false)} 
+        isDark={isDark} 
+      />
+      
+      <ScheduleScreen 
+        visible={scheduleVisible} 
+        onClose={() => setScheduleVisible(false)} 
+        isDark={isDark} 
+      />
+    </>
   );
 }
 

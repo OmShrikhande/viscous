@@ -33,6 +33,11 @@ const ThemeToggleSwitch = ({ currentValue, userEmail, onToggle }) => {
     setIsUpdating(true);
     const newValue = !currentValue;
     
+    // Immediately notify parent to update UI before animations and network operations
+    if (onToggle) {
+      onToggle(newValue);
+    }
+    
     // Animate the switch press
     scaleValue.value = withSpring(0.9, { damping: 10 }, () => {
       scaleValue.value = withSpring(1);
@@ -45,11 +50,7 @@ const ThemeToggleSwitch = ({ currentValue, userEmail, onToggle }) => {
     });
 
     try {
-      // 🔥 Update Firestore
-      const docRef = doc(db, 'userdata', userEmail);
-      await updateDoc(docRef, { isDark: newValue });
-
-      // 💾 Update AsyncStorage
+      // Update AsyncStorage first for immediate local persistence
       const storedData = await AsyncStorage.getItem('userData');
       if (storedData) {
         const parsed = JSON.parse(storedData);
@@ -57,15 +58,20 @@ const ThemeToggleSwitch = ({ currentValue, userEmail, onToggle }) => {
         await AsyncStorage.setItem('userData', JSON.stringify(parsed));
       }
 
-      // ✅ Notify parent (Profile.js)
-      if (onToggle) {
-        onToggle(newValue);
-      }
+      // Then update Firestore (can happen in background)
+      const docRef = doc(db, 'userdata', userEmail);
+      await updateDoc(docRef, { isDark: newValue });
 
+      // Show success message
       Alert.alert('Theme Updated', `Switched to ${newValue ? 'Dark' : 'Light'} Mode`);
     } catch (error) {
       console.error('Error updating theme:', error);
       Alert.alert('Error', 'Failed to update theme');
+      
+      // Revert the theme if there was an error
+      if (onToggle) {
+        onToggle(currentValue);
+      }
     }
 
     setIsUpdating(false);

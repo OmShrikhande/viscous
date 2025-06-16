@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
+import { useAuth, useUser } from '@clerk/clerk-expo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { setDoc, doc, serverTimestamp, getDoc } from 'firebase/firestore';
-import { useUser, useAuth } from '@clerk/clerk-expo';
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { useEffect } from 'react';
 import { firestoreDb as db } from '../../configs/FirebaseConfigs';
 
 export default function UserDataManager() {
@@ -18,16 +18,15 @@ export default function UserDataManager() {
         const email = user.emailAddresses?.[0]?.emailAddress || 'unknown';
         const name = user.fullName || 'No Name';
         const image = user.imageUrl;
-        const role = await AsyncStorage.getItem('userRole') || 'user';
-
         const userRef = doc(db, 'userdata', email);
         const docSnap = await getDoc(userRef);
+        const defaultRole = await AsyncStorage.getItem('userRole') || 'user';
 
         const userData = {
           name,
           email,
           image,
-          role,
+          role: docSnap.exists() ? docSnap.data().role : defaultRole,
           isDark: false,
           lastUpdated: serverTimestamp(),
         };

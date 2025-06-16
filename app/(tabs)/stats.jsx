@@ -1,25 +1,26 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  RefreshControl,
-  TouchableOpacity,
-  ActivityIndicator,
-} from "react-native";
-import { firestoreDb } from "../../configs/FirebaseConfigs";
-import {
-  collection,
-  getDocs,
-  updateDoc,
-  doc,
-  onSnapshot,
-} from "firebase/firestore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as FileSystem from "expo-file-system";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
-import * as FileSystem from "expo-file-system";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+    collection,
+    doc,
+    getDoc,
+    getDocs,
+    onSnapshot,
+    updateDoc,
+} from "firebase/firestore";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+    ActivityIndicator,
+    FlatList,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from "react-native";
+import { firestoreDb } from "../../configs/FirebaseConfigs";
 
 export default function Stats() {
   const [locations, setLocations] = useState([]);
@@ -33,20 +34,40 @@ export default function Stats() {
     const fetchUserTheme = async () => {
       try {
         const userDataJson = await AsyncStorage.getItem("userData");
+        console.log("📱 User data from AsyncStorage:", userDataJson);
+        
         const localData = userDataJson ? JSON.parse(userDataJson) : null;
         const userEmail = localData?.email;
 
         if (!userEmail) {
+          console.log("❌ No user email found in AsyncStorage");
           setRole("user");
           return;
         }
 
         setEmail(userEmail);
+        console.log("📧 User email:", userEmail);
+        
+        // First, try to get the role directly from Firestore
         const userDocRef = doc(firestoreDb, "userdata", userEmail);
-
+        const docSnap = await getDoc(userDocRef);
+        
+        if (docSnap.exists()) {
+          const userData = docSnap.data();
+          console.log("🔥 User data from Firestore:", userData);
+          setRole(userData.role || "user");
+          setIsDark(userData.isDark === true);
+          console.log("👑 User role set to:", userData.role || "user");
+        } else {
+          console.log("⚠️ User document does not exist in Firestore");
+          setRole("user");
+        }
+        
+        // Then set up real-time listener for updates
         const unsub = onSnapshot(userDocRef, (docSnap) => {
           if (docSnap.exists()) {
             const { role: roleFromDb, isDark: themeFromDb } = docSnap.data();
+            console.log("🔄 Real-time update - Role:", roleFromDb);
             setRole(roleFromDb || "user");
             setIsDark(themeFromDb === true);
           } else {
@@ -242,9 +263,47 @@ export default function Stats() {
   if (role !== "admin") {
     return (
       <View style={styles.center}>
-        <Text style={{ fontSize: 20, fontWeight: "bold", color: "red" }}>
+        <Text style={{ fontSize: 20, fontWeight: "bold", color: "red", marginBottom: 20 }}>
           ❌ You're a user. None of your business 😎
         </Text>
+        
+        <TouchableOpacity 
+          style={{
+            backgroundColor: '#2196F3',
+            padding: 15,
+            borderRadius: 10,
+            marginTop: 20,
+          }}
+          onPress={async () => {
+            try {
+              // Debug function to check user data
+              const userDataJson = await AsyncStorage.getItem("userData");
+              console.log("Debug - AsyncStorage userData:", userDataJson);
+              
+              if (email) {
+                const userDocRef = doc(firestoreDb, "userdata", email);
+                const docSnap = await getDoc(userDocRef);
+                
+                if (docSnap.exists()) {
+                  console.log("Debug - Firestore userData:", docSnap.data());
+                  Alert.alert(
+                    "User Data", 
+                    `Email: ${email}\nRole in Firestore: ${docSnap.data().role || "not set"}\nCurrent role state: ${role}`
+                  );
+                } else {
+                  Alert.alert("Error", "User document not found in Firestore");
+                }
+              } else {
+                Alert.alert("Error", "Email not set");
+              }
+            } catch (error) {
+              console.error("Debug error:", error);
+              Alert.alert("Error", error.message);
+            }
+          }}
+        >
+          <Text style={{ color: 'white', fontWeight: 'bold' }}>Debug User Role</Text>
+        </TouchableOpacity>
       </View>
     );
   }

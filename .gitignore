@@ -46,3 +46,4 @@ FirebaseConfigs.js
 android
 .vscode
 app.config.js
+*.txt
