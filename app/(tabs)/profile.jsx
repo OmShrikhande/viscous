@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Dimensions, StyleSheet, Text } from 'react-native';
+import { ActivityIndicator, Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, {
     FadeIn,
     FadeInDown,
@@ -12,6 +12,7 @@ import Animated, {
     withTiming
 } from 'react-native-reanimated';
 
+import EditProfileForm from '../../components/Profile/EditProfileForm';
 import MenuList from '../../components/Profile/MenuList';
 import TestNotifications from '../../components/usefulComponent/TestNotifications';
 import ThemeToggleSwitch from '../../components/usefulComponent/ThemeToggleSwitch';
@@ -21,8 +22,13 @@ export default function Profile() {
   const [userEmail, setUserEmail] = useState(null);
   const [userName, setUserName] = useState('');
   const [userImage, setUserImage] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [routeNumber, setRouteNumber] = useState('');
+  const [busStop, setBusStop] = useState('');
+  const [lastUpdated, setLastUpdated] = useState(null);
   const [isDark, setIsDark] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [showEditProfile, setShowEditProfile] = useState(false);
   
   // Animation values
   const avatarScale = useSharedValue(0.8);
@@ -40,6 +46,10 @@ export default function Profile() {
           console.log('📧 User Email:', parsed.email);
           setUserName(parsed.name || 'No Name');
           setUserImage(parsed.image || null);
+          setPhoneNumber(parsed.phoneNumber || '');
+          setRouteNumber(parsed.routeNumber || '');
+          setBusStop(parsed.busStop || '');
+          setLastUpdated(parsed.lastUpdated ? new Date(parsed.lastUpdated) : null);
           setIsDark(parsed.isDark);
         }
       } catch (err) {
@@ -80,6 +90,14 @@ export default function Profile() {
       opacity: cardOpacity.value,
     };
   });
+
+  const handleProfileUpdate = (updatedData) => {
+    setUserName(updatedData.name || '');
+    setPhoneNumber(updatedData.phoneNumber || '');
+    setRouteNumber(updatedData.routeNumber || '');
+    setBusStop(updatedData.busStop || '');
+    setLastUpdated(updatedData.lastUpdated ? new Date(updatedData.lastUpdated) : null);
+  };
 
   const themeStyles = isDark ? styles.dark : styles.light;
   const textColor = { color: isDark ? '#fff' : '#000' };
@@ -152,6 +170,40 @@ export default function Profile() {
           <Animated.View style={profileInfoAnimatedStyle}>
             <Text style={[styles.name, textColor]}>{userName}</Text>
             <Text style={[styles.email, textColor]}>{userEmail}</Text>
+            
+            {phoneNumber && (
+              <View style={styles.infoContainer}>
+                <Text style={[styles.infoLabel, textColor]}>Phone:</Text>
+                <Text style={[styles.infoValue, textColor]}>{phoneNumber}</Text>
+              </View>
+            )}
+            
+            {routeNumber && (
+              <View style={styles.infoContainer}>
+                <Text style={[styles.infoLabel, textColor]}>Route Number:</Text>
+                <Text style={[styles.infoValue, textColor]}>{routeNumber}</Text>
+              </View>
+            )}
+            
+            {busStop && (
+              <View style={styles.infoContainer}>
+                <Text style={[styles.infoLabel, textColor]}>Bus Stop:</Text>
+                <Text style={[styles.infoValue, textColor]}>{busStop}</Text>
+              </View>
+            )}
+            
+            {lastUpdated && (
+              <Text style={[styles.lastUpdated, { color: isDark ? '#aaa' : '#888' }]}>
+                Last updated: {lastUpdated.toLocaleDateString()}
+              </Text>
+            )}
+            
+            <TouchableOpacity
+              style={[styles.editButton, { backgroundColor: isDark ? '#1E90FF' : '#1E90FF' }]}
+              onPress={() => setShowEditProfile(true)}
+            >
+              <Text style={styles.editButtonText}>Edit Profile</Text>
+            </TouchableOpacity>
           </Animated.View>
         </BlurView>
       </Animated.View>
@@ -196,6 +248,23 @@ export default function Profile() {
       >
         Made with ❤️ by Om Shrikhande
       </Animated.Text>
+      
+      {/* Edit Profile Modal */}
+      <EditProfileForm
+        visible={showEditProfile}
+        onClose={() => setShowEditProfile(false)}
+        userData={{
+          name: userName,
+          phoneNumber,
+          routeNumber,
+          busStop,
+          email: userEmail,
+          image: userImage,
+          isDark
+        }}
+        isDark={isDark}
+        onUpdate={handleProfileUpdate}
+      />
     </Animated.ScrollView>
   );
 }
@@ -259,6 +328,40 @@ const styles = StyleSheet.create({
     opacity: 0.8,
     textAlign: 'center',
     marginTop: 5,
+    marginBottom: 10,
+  },
+  infoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 4,
+    width: '100%',
+    justifyContent: 'center',
+  },
+  infoLabel: {
+    fontSize: 14,
+    fontFamily: 'flux-bold',
+    marginRight: 5,
+  },
+  infoValue: {
+    fontSize: 14,
+    fontFamily: 'flux-medium',
+  },
+  lastUpdated: {
+    fontSize: 12,
+    fontFamily: 'flux',
+    marginTop: 10,
+    textAlign: 'center',
+  },
+  editButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    marginTop: 15,
+  },
+  editButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontFamily: 'flux-bold',
   },
   divider: {
     height: 2,

@@ -38,6 +38,11 @@ export default function UserDataManager() {
           const existingData = docSnap.data();
           userData.isDark = existingData.isDark;
           userData.createdAt = existingData.createdAt;
+          
+          // Preserve user onboarding data if it exists
+          if (existingData.phoneNumber) userData.phoneNumber = existingData.phoneNumber;
+          if (existingData.routeNumber) userData.routeNumber = existingData.routeNumber;
+          if (existingData.busStop) userData.busStop = existingData.busStop;
         }
 
         // Save to Firestore

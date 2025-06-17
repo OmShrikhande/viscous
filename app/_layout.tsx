@@ -2,6 +2,7 @@ import { ClerkProvider, SignedIn, SignedOut } from "@clerk/clerk-expo";
 import { useFonts } from "expo-font";
 import { Stack, useRouter } from "expo-router";
 import LoginScreen from "../components/LoginScreen.jsx";
+import OnboardingScreen from "../components/OnboardingScreen.jsx";
 // import { tokenCache } from '@/cache'
 import * as SecureStore from 'expo-secure-store';
 import { useEffect, useRef } from "react";
@@ -81,10 +82,11 @@ export default function RootLayout() {
    
  
       <SignedIn>
-      <Stack>      
+        <OnboardingScreen>
+          <Stack>      
             <Stack.Screen name="(tabs)" options={{ headerShown:false }} />
-      </Stack>
-          
+          </Stack>
+        </OnboardingScreen>
       </SignedIn>
       
       <SignedOut>
