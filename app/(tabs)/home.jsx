@@ -4,24 +4,28 @@ import { useRouter } from 'expo-router'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { useEffect, useRef, useState } from 'react'
 import { Animated, RefreshControl, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import BusStopNotifications from '../../components/home/BusStopNotifications'
 import BusStopTimeline from '../../components/home/BusStopTimeline'
+import BusCapacityIndicator from '../../components/home/BusCapacityIndicator'
 import Header from '../../components/home/Header'
 import UserDataManager from '../../components/usefulComponent/UserDataManager'
 import { firestoreDb } from '../../configs/FirebaseConfigs'
 import { Colors } from '../../constants/Colors'
+import { initializeNotifications } from '../../utils/notificationHelper'
 
 export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('timeline');
   const [isDark, setIsDark] = useState(false);
   const [userEmail, setUserEmail] = useState(null);
+  const [userRouteNumber, setUserRouteNumber] = useState('');
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   const router = useRouter();
 
-  // Load user theme
+  // Load user theme and initialize notifications
   useEffect(() => {
-    const fetchUserTheme = async () => {
+    const fetchUserData = async () => {
       try {
         const userDataJson = await AsyncStorage.getItem('userData');
         
@@ -30,29 +34,53 @@ export default function Home() {
           return;
         }
         
-        const { email } = JSON.parse(userDataJson);
-        setUserEmail(email);
+        const userData = JSON.parse(userDataJson);
+        setUserEmail(userData.email);
+        setUserRouteNumber(userData.routeNumber || '');
         
-        if (!email) {
+        if (!userData.email) {
           console.warn('⚠️ Email not found inside userData');
           return;
         }
         
-        const userDocRef = doc(firestoreDb, 'userdata', email);
+        const userDocRef = doc(firestoreDb, 'userdata', userData.email);
         const unsub = onSnapshot(userDocRef, (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
             setIsDark(data.isDark === true);
+            
+            // Update route number if it exists in Firestore
+            if (data.routeNumber && data.routeNumber !== userRouteNumber) {
+              setUserRouteNumber(data.routeNumber);
+              // Also update in AsyncStorage
+              AsyncStorage.getItem('userData').then(storedData => {
+                if (storedData) {
+                  const parsedData = JSON.parse(storedData);
+                  AsyncStorage.setItem('userData', JSON.stringify({
+                    ...parsedData,
+                    routeNumber: data.routeNumber
+                  }));
+                }
+              });
+            }
           }
         });
         
         return () => unsub();
       } catch (err) {
-        console.error('Failed to fetch theme:', err);
+        console.error('Failed to fetch user data:', err);
       }
     };
     
-    fetchUserTheme();
+    fetchUserData();
+    
+    // Initialize notifications
+    initializeNotifications();
+    
+    // Register background tasks
+    import('../../utils/backgroundTasks').then(module => {
+      module.registerBackgroundTasks();
+    });
   }, []);
 
   // Animation when component mounts
@@ -98,6 +126,8 @@ export default function Home() {
               { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
             ]}
           >
+            <BusStopNotifications isDark={isDark} />
+            <BusCapacityIndicator isDark={isDark} routeNumber={userRouteNumber} />
             <BusStopTimeline isDark={isDark} />
           </Animated.View>
         );

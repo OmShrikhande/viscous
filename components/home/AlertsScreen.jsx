@@ -11,7 +11,8 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { collection, getDocs } from 'firebase/firestore';
-import { firestoreDb } from '../../configs/FirebaseConfigs';
+import { onValue, ref } from 'firebase/database';
+import { firestoreDb, realtimeDatabase } from '../../configs/FirebaseConfigs';
 import { Colors } from '../../constants/Colors';
 import Animated, { 
   FadeIn, 
@@ -36,19 +37,50 @@ const AlertsScreen = ({ visible, onClose, isDark }) => {
   const fetchAlerts = async () => {
     setLoading(true);
     try {
+      // Get alerts from Firestore
       const alertsCollection = collection(firestoreDb, 'alerts');
       const alertSnapshot = await getDocs(alertsCollection);
       
-      const alertsList = alertSnapshot.docs.map(doc => ({
+      const firestoreAlerts = alertSnapshot.docs.map(doc => ({
         id: doc.id,
+        source: 'firestore',
         ...doc.data(),
         time: doc.data().time ? new Date(doc.data().time.seconds * 1000) : new Date()
       }));
       
-      // Sort alerts by time (newest first)
-      alertsList.sort((a, b) => b.time - a.time);
+      // Get admin alerts from Realtime Database
+      const adminAlertsRef = ref(realtimeDatabase, 'adminAlerts');
       
-      setAlerts(alertsList);
+      // Create a promise to handle the onValue callback
+      const realtimeAlerts = await new Promise((resolve) => {
+        onValue(adminAlertsRef, (snapshot) => {
+          const data = snapshot.val();
+          if (!data) {
+            resolve([]);
+            return;
+          }
+          
+          // Convert object to array
+          const alertsArray = Object.keys(data).map(key => ({
+            id: key,
+            source: 'realtime',
+            ...data[key],
+            time: data[key].timestamp ? new Date(data[key].timestamp) : new Date()
+          }));
+          
+          resolve(alertsArray);
+        }, {
+          onlyOnce: true
+        });
+      });
+      
+      // Combine alerts from both sources
+      const combinedAlerts = [...firestoreAlerts, ...realtimeAlerts];
+      
+      // Sort alerts by time (newest first)
+      combinedAlerts.sort((a, b) => b.time - a.time);
+      
+      setAlerts(combinedAlerts);
     } catch (error) {
       console.error('Error fetching alerts:', error);
     } finally {
@@ -107,9 +139,9 @@ const AlertsScreen = ({ visible, onClose, isDark }) => {
         <View style={styles.alertHeader}>
           <View style={styles.alertTitleContainer}>
             <Ionicons 
-              name="notifications" 
+              name={item.source === 'realtime' ? "megaphone" : "notifications"} 
               size={20} 
-              color={isDark ? Colors.LIGHT : Colors.PRIMARY} 
+              color={item.source === 'realtime' ? (isDark ? '#ff9800' : '#e65100') : (isDark ? Colors.LIGHT : Colors.PRIMARY)} 
               style={styles.alertIcon}
             />
             <Text style={[

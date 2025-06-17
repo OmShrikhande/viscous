@@ -14,6 +14,7 @@ import Animated, {
 
 import EditProfileForm from '../../components/Profile/EditProfileForm';
 import MenuList from '../../components/Profile/MenuList';
+import BusNotificationsToggle from '../../components/Profile/BusNotificationsToggle';
 import TestNotifications from '../../components/usefulComponent/TestNotifications';
 import ThemeToggleSwitch from '../../components/usefulComponent/ThemeToggleSwitch';
 
@@ -224,6 +225,16 @@ export default function Profile() {
           onToggle={(newVal) => setIsDark(newVal)}
         />
       </Animated.View>
+      
+      {/* Bus Notifications Toggle */}
+      <Animated.View
+        entering={FadeInDown.delay(700).springify()}
+      >
+        <BusNotificationsToggle
+          isDark={isDark}
+          userEmail={userEmail}
+        />
+      </Animated.View>
 
       {/* Menu List */}
       <Animated.View 
@@ -238,7 +249,7 @@ export default function Profile() {
         style={styles.testNotificationsContainer}
         entering={FadeInDown.delay(900).springify()}
       >
-        <TestNotifications />
+        <TestNotifications isDark={isDark} />
       </Animated.View>
 
       {/* Footer */}
