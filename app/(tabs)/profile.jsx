@@ -1,22 +1,19 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-
+import { ActivityIndicator, Dimensions, StyleSheet, Text } from 'react-native';
 import Animated, {
-  FadeIn,
-  FadeInDown,
-  FadeInUp,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming
+    FadeIn,
+    FadeInDown,
+    FadeInUp,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
+    withTiming
 } from 'react-native-reanimated';
-import { firestoreDb } from '../../configs/FirebaseConfigs';
-import { Colors } from '../../constants/Colors';
 
 import MenuList from '../../components/Profile/MenuList';
+import TestNotifications from '../../components/usefulComponent/TestNotifications';
 import ThemeToggleSwitch from '../../components/usefulComponent/ThemeToggleSwitch';
 
 
@@ -26,10 +23,6 @@ export default function Profile() {
   const [userImage, setUserImage] = useState('');
   const [isDark, setIsDark] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [userRole, setUserRole] = useState('user');
-  const [routeNumber, setRouteNumber] = useState('');
-  const [stopName, setStopName] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
   
   // Animation values
   const avatarScale = useSharedValue(0.8);
@@ -48,31 +41,6 @@ export default function Profile() {
           setUserName(parsed.name || 'No Name');
           setUserImage(parsed.image || null);
           setIsDark(parsed.isDark);
-          
-          // Set route and stop info if available
-          if (parsed.routeNumber) setRouteNumber(parsed.routeNumber);
-          if (parsed.stopName) setStopName(parsed.stopName);
-          if (parsed.phoneNumber) setPhoneNumber(parsed.phoneNumber);
-          
-          // Fetch user data from Firestore
-          if (parsed.email) {
-            const userDocRef = doc(firestoreDb, "userdata", parsed.email);
-            const userDoc = await getDoc(userDocRef);
-            
-            if (userDoc.exists()) {
-              const userData = userDoc.data();
-              setUserRole(userData.role || 'user');
-              console.log('👤 User Role from Firestore:', userData.role || 'user');
-              
-              // Update route and stop info from Firestore if available
-              if (userData.routeNumber) setRouteNumber(userData.routeNumber);
-              if (userData.stopName) setStopName(userData.stopName);
-              if (userData.phoneNumber) setPhoneNumber(userData.phoneNumber);
-            } else {
-              console.log('⚠️ User document does not exist in Firestore');
-              setUserRole('user');
-            }
-          }
         }
       } catch (err) {
         console.error('❌ Failed to load user data:', err);
@@ -92,39 +60,6 @@ export default function Profile() {
       profileInfoY.value = withTiming(0, { duration: 600 });
     }
   }, [isLoading]);
-  
-  // Function to toggle user role between 'user' and 'admin'
-  const toggleUserRole = async () => {
-    if (!userEmail) {
-      Alert.alert('Error', 'User email not found');
-      return;
-    }
-    
-    try {
-      // Toggle the role
-      const newRole = userRole === 'admin' ? 'user' : 'admin';
-      
-      // Update in Firestore
-      const userDocRef = doc(firestoreDb, "userdata", userEmail);
-      await updateDoc(userDocRef, { role: newRole });
-      
-      // Update local state
-      setUserRole(newRole);
-      
-      // Update in AsyncStorage
-      const storedData = await AsyncStorage.getItem('userData');
-      if (storedData) {
-        const parsed = JSON.parse(storedData);
-        parsed.role = newRole;
-        await AsyncStorage.setItem('userData', JSON.stringify(parsed));
-      }
-      
-      Alert.alert('Success', `Role changed to ${newRole}`);
-    } catch (error) {
-      console.error('❌ Failed to update user role:', error);
-      Alert.alert('Error', 'Failed to update role. Please try again.');
-    }
-  };
   
   // Animated styles
   const avatarAnimatedStyle = useAnimatedStyle(() => {
@@ -237,52 +172,6 @@ export default function Profile() {
           onToggle={(newVal) => setIsDark(newVal)}
         />
       </Animated.View>
-      
-      {/* Route and Stop Information */}
-      <Animated.View
-        entering={FadeInDown.delay(700).springify()}
-        style={styles.infoContainer}
-      >
-        {routeNumber && stopName ? (
-          <>
-            <Text style={styles.infoTitle}>Your Bus Information</Text>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Route Number:</Text>
-              <Text style={styles.infoValue}>Route {routeNumber}</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Your Stop:</Text>
-              <Text style={styles.infoValue}>{stopName}</Text>
-            </View>
-            {phoneNumber && (
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Phone:</Text>
-                <Text style={styles.infoValue}>{phoneNumber}</Text>
-              </View>
-            )}
-          </>
-        ) : (
-          <Text style={styles.noInfoText}>No bus route information available</Text>
-        )}
-      </Animated.View>
-      
-      {/* Role Toggle Button */}
-      <Animated.View
-        entering={FadeInDown.delay(800).springify()}
-        style={{ marginTop: 20, marginBottom: 10 }}
-      >
-        <TouchableOpacity
-          style={[
-            styles.roleButton,
-            { backgroundColor: userRole === 'admin' ? '#4CAF50' : '#2196F3' }
-          ]}
-          onPress={toggleUserRole}
-        >
-          <Text style={styles.roleButtonText}>
-            Current Role: {userRole} (Tap to Toggle)
-          </Text>
-        </TouchableOpacity>
-      </Animated.View>
 
       {/* Menu List */}
       <Animated.View 
@@ -290,6 +179,14 @@ export default function Profile() {
         entering={FadeInDown.delay(800).springify()}
       >
         <MenuList isDark={isDark} />
+      </Animated.View>
+
+      {/* Test Notifications Component */}
+      <Animated.View
+        style={styles.testNotificationsContainer}
+        entering={FadeInDown.delay(900).springify()}
+      >
+        <TestNotifications />
       </Animated.View>
 
       {/* Footer */}
@@ -316,91 +213,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  blurContainer: {
-    padding: 30,
-    borderRadius: 20,
-    alignItems: 'center',
-    width: width * 0.8,
-  },
-  loadingText: {
-    marginTop: 15,
-    fontSize: 16,
-    fontFamily: 'flux-medium',
-    textAlign: 'center',
-  },
-  notFoundText: {
-    fontSize: 18,
-    fontFamily: 'flux-medium',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
   light: {
     backgroundColor: '#f9f9f9',
   },
   dark: {
     backgroundColor: '#121212',
-  },
-  roleButton: {
-    padding: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: 20,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  roleButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontFamily: 'flux-medium',
-    textAlign: 'center',
-  },
-  infoContainer: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 15,
-    padding: 15,
-    marginHorizontal: 20,
-    marginTop: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  infoTitle: {
-    fontSize: 18,
-    fontFamily: 'flux-bold',
-    color: Colors.PRIMARY,
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  infoLabel: {
-    fontSize: 16,
-    fontFamily: 'flux-medium',
-    color: '#555',
-  },
-  infoValue: {
-    fontSize: 16,
-    fontFamily: 'flux',
-    color: '#333',
-  },
-  noInfoText: {
-    fontSize: 16,
-    fontFamily: 'flux',
-    color: '#999',
-    textAlign: 'center',
-    padding: 10,
   },
   profileCard: {
     alignItems: 'center',
@@ -412,11 +229,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
-  },
-  profileCardBlur: {
-    width: '100%',
-    padding: 25,
-    alignItems: 'center',
   },
   profileCardBlur: {
     width: '100%',
@@ -456,6 +268,9 @@ const styles = StyleSheet.create({
   },
   menuContainer: {
     marginTop: 10,
+  },
+  testNotificationsContainer: {
+    marginTop: 20,
   },
   footer: {
     marginTop: 40,

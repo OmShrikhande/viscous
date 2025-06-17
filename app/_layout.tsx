@@ -5,10 +5,10 @@ import LoginScreen from "../components/LoginScreen.jsx";
 // import { tokenCache } from '@/cache'
 import * as SecureStore from 'expo-secure-store';
 import { useEffect, useRef } from "react";
-import OnboardingWrapper from "../components/OnboardingWrapper";
 import {
   addNotificationReceivedListener,
-  addNotificationResponseListener
+  addNotificationResponseListener,
+  removeAllNotificationListeners
 } from "../utils/notificationHelper";
 
 const tokenCache = {
@@ -59,13 +59,13 @@ export default function RootLayout() {
 
     // Clean up listeners on unmount
     return () => {
-      // Remove listeners individually
-      if (notificationListener.current) {
-        notificationListener.current.remove();
-      }
-      if (responseListener.current) {
-        responseListener.current.remove();
-      }
+      // Use the updated helper function to remove specific listeners
+      const listenersToRemove = [
+        notificationListener.current,
+        responseListener.current
+      ].filter(Boolean); // Filter out any undefined listeners
+      
+      removeAllNotificationListeners(listenersToRemove);
     };
   }, []);
 
@@ -81,11 +81,10 @@ export default function RootLayout() {
    
  
       <SignedIn>
-        <OnboardingWrapper>
-          <Stack>
+      <Stack>      
             <Stack.Screen name="(tabs)" options={{ headerShown:false }} />
-          </Stack>
-        </OnboardingWrapper>
+      </Stack>
+          
       </SignedIn>
       
       <SignedOut>

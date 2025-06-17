@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "899399291440",
+    "firebase_url": "https://bus-tracker-4e0fc-default-rtdb.firebaseio.com",
+    "project_id": "bus-tracker-4e0fc",
+    "storage_bucket": "bus-tracker-4e0fc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:899399291440:android:81de28b1e9721d4ae293f5",
+        "android_client_info": {
+          "package_name": "com.omshrikhande.viscous"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDTZ_VZ3sxIc0e-p-rKPcMzNx8JGM5ZzjQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
