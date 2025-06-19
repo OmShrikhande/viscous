@@ -14,7 +14,8 @@ import { firestoreDb } from '../../configs/FirebaseConfigs'
 import { Colors } from '../../constants/Colors'
 import { initializeNotifications } from '../../utils/notificationHelper'
 
-export default function Home() {
+
+const Home = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('timeline');
   const [isDark, setIsDark] = useState(false);
@@ -444,3 +445,6 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
 })
+
+
+export default Home;
