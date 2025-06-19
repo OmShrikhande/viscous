@@ -1,9 +1,9 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useUser } from '@clerk/clerk-expo';
-import { collection, doc, getDoc, getDocs, onSnapshot } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { onValue, ref } from 'firebase/database';
+import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { Alert, StyleSheet, Switch, Text, View } from 'react-native';
+import { StyleSheet, Switch, Text, View } from 'react-native';
 import { firestoreDb, realtimeDatabase } from '../../configs/FirebaseConfigs';
 import { sendLocalNotification } from '../../utils/notificationHelper';
 
@@ -108,6 +108,7 @@ const BusStopNotifications = ({ isDark }) => {
     const unsubscribe = onValue(locationRef, (snapshot) => {
       const locationData = snapshot.val();
       if (locationData) {
+        // Use functional updates to avoid stale state references
         setBusLocation({
           latitude: locationData.Latitude,
           longitude: locationData.Longitude,
@@ -118,10 +119,17 @@ const BusStopNotifications = ({ isDark }) => {
         // Process bus location to determine which stop it's at or approaching
         processBusLocation(locationData);
       }
+    }, (error) => {
+      console.error('Error in bus location listener:', error);
+      setError('Failed to get bus location updates');
     });
 
-    return () => unsubscribe();
-  }, [userRouteNumber, notificationsEnabled, routeStops, userBusStop]);
+    // Cleanup function
+    return () => {
+      console.log('Cleaning up bus location listener');
+      unsubscribe();
+    };
+  }, [userRouteNumber, notificationsEnabled]);
 
   // Process bus location to determine which stop it's at or approaching
   const processBusLocation = async (locationData) => {

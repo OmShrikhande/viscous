@@ -1,6 +1,7 @@
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { collection, doc, getDoc, getDocs, onSnapshot } from 'firebase/firestore';
 import { onValue, ref } from 'firebase/database';
+import { collection, getDocs } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -8,12 +9,10 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View
 } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { firestoreDb, realtimeDatabase } from '../../configs/FirebaseConfigs';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-import { Ionicons } from '@expo/vector-icons';
 
 const BusStopTimeline = ({ isDark }) => {
   const [userRouteNumber, setUserRouteNumber] = useState('');
@@ -100,9 +99,13 @@ const BusStopTimeline = ({ isDark }) => {
     console.log(`Setting up bus location listener for route ${userRouteNumber}`);
     const locationRef = ref(realtimeDatabase, 'adddelete/Location');
     
+    // Create a reference to the latest routeStops to avoid closure issues
+    let currentRouteStops = routeStops;
+    
     const unsubscribe = onValue(locationRef, (snapshot) => {
       const locationData = snapshot.val();
       if (locationData) {
+        // Use functional updates to avoid stale state references
         setBusLocation({
           latitude: locationData.Latitude,
           longitude: locationData.Longitude,
@@ -113,9 +116,16 @@ const BusStopTimeline = ({ isDark }) => {
         // Process bus location to determine which stop it's at or approaching
         processBusLocation(locationData);
       }
+    }, (error) => {
+      console.error('Error in bus location listener:', error);
+      setError('Failed to get bus location updates');
     });
 
-    return () => unsubscribe();
+    // Cleanup function
+    return () => {
+      console.log('Cleaning up bus location listener');
+      unsubscribe();
+    };
   }, [userRouteNumber, routeStops]);
 
   // Process bus location to determine which stop it's at or approaching

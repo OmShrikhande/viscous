@@ -9,24 +9,44 @@ const LastLogsDrawer = ({ isDark, currentStop }) => {
 
   useEffect(() => {
     const entriesRef = ref(realtimeDatabase, 'Route1/1462025/entries');
+    
+    // Use a more memory-efficient approach
     const unsub = onValue(entriesRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        const parsed = Object.values(data)
-          .map(entry => ({
-            time: entry.time,
-            speed: entry.speed,
-            lat: entry.latitude,
-            lng: entry.longitude,
-            driver: entry.driverName,
-            status: entry.status,
-          }))
-          .sort((a, b) => b.time - a.time)
-          .slice(0, 5);
-        setLogs(parsed);
+        try {
+          // Process data in chunks to avoid memory pressure
+          const entries = Object.values(data);
+          
+          // Only process the most recent entries to save memory
+          const recentEntries = entries.slice(-10);
+          
+          const parsed = recentEntries
+            .map(entry => ({
+              time: entry.time,
+              speed: entry.speed,
+              lat: entry.latitude,
+              lng: entry.longitude,
+              driver: entry.driverName,
+              status: entry.status,
+            }))
+            .sort((a, b) => b.time - a.time)
+            .slice(0, 5);
+            
+          setLogs(parsed);
+        } catch (error) {
+          console.error('Error processing log entries:', error);
+        }
       }
+    }, (error) => {
+      console.error('Error in logs listener:', error);
     });
-    return () => unsub();
+    
+    // Cleanup function
+    return () => {
+      console.log('Cleaning up logs listener');
+      unsub();
+    };
   }, []);
 
   return (

@@ -7,9 +7,10 @@ import OnboardingScreen from "../components/OnboardingScreen.jsx";
 import * as SecureStore from 'expo-secure-store';
 import { useEffect, useRef } from "react";
 import {
-  addNotificationReceivedListener,
-  addNotificationResponseListener,
-  removeAllNotificationListeners
+    addNotificationReceivedListener,
+    addNotificationResponseListener,
+    initializeNotifications,
+    removeAllNotificationListeners
 } from "../utils/notificationHelper";
 
 const tokenCache = {
@@ -36,6 +37,9 @@ export default function RootLayout() {
   const responseListener = useRef();
 
   useEffect(() => {
+    // Initialize notifications system
+    initializeNotifications();
+    
     // Set up notification listeners when app is in foreground
     notificationListener.current = addNotificationReceivedListener(notification => {
       console.log('Notification received in foreground:', notification);

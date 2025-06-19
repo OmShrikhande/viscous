@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, Animated, Easing } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { onValue, ref } from 'firebase/database';
+import { useEffect, useState } from 'react';
+import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { realtimeDatabase } from '../../configs/FirebaseConfigs';
 
 const BusCapacityIndicator = ({ isDark, routeNumber }) => {
@@ -20,6 +20,9 @@ const BusCapacityIndicator = ({ isDark, routeNumber }) => {
     
     // Reference to bus capacity data in Firebase
     const capacityRef = ref(realtimeDatabase, `busCapacity/route${routeNumber}`);
+    
+    // Set loading state
+    setLoading(true);
     
     const unsubscribe = onValue(capacityRef, (snapshot) => {
       const data = snapshot.val();
@@ -40,19 +43,28 @@ const BusCapacityIndicator = ({ isDark, routeNumber }) => {
           setSeatAvailability(data.seatMap);
         }
         
-        // Animate progress bar
-        Animated.timing(progressAnim, {
+        // Animate progress bar - use a local reference to avoid memory leaks
+        const animation = Animated.timing(progressAnim, {
           toValue: percentage / 100,
           duration: 1000,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: false
-        }).start();
+        });
+        
+        animation.start();
       }
       
       setLoading(false);
+    }, (error) => {
+      console.error('Error in bus capacity listener:', error);
+      setLoading(false);
     });
     
-    return () => unsubscribe();
+    // Cleanup function
+    return () => {
+      console.log('Cleaning up bus capacity listener');
+      unsubscribe();
+    };
   }, [routeNumber]);
 
   // Get color based on capacity percentage
