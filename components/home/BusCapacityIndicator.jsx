@@ -19,28 +19,50 @@ const BusCapacityIndicator = ({ isDark, routeNumber }) => {
     if (!routeNumber) return;
     
     // Reference to bus capacity data in Firebase
-    const capacityRef = ref(realtimeDatabase, `busCapacity/route${routeNumber}`);
+    const capacityRef = ref(realtimeDatabase, `Route${routeNumber}/demo/capacity`);
+    
+    // Also get the total capacity reference
+    const totalCapacityRef = ref(realtimeDatabase, `busCapacity/route${routeNumber}`);
     
     // Set loading state
     setLoading(true);
     
-    const unsubscribe = onValue(capacityRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
+    // First get the total capacity data
+    onValue(totalCapacityRef, (totalCapSnapshot) => {
+      const totalCapData = totalCapSnapshot.val();
+      const totalCapacity = totalCapData?.totalCapacity || 40;
+      const seatMap = totalCapData?.seatMap || [];
+      
+      // Now listen for current capacity changes
+      const unsubscribe = onValue(capacityRef, (snapshot) => {
+        const currentPassengers = snapshot.val() || 0;
+        
         // Calculate percentage
-        const percentage = Math.min(100, Math.round((data.currentPassengers / data.totalCapacity) * 100));
+        const percentage = Math.min(100, Math.round((currentPassengers / totalCapacity) * 100));
         
         // Update capacity state
         setCapacity({
-          current: data.currentPassengers || 0,
-          total: data.totalCapacity || 40,
+          current: currentPassengers,
+          total: totalCapacity,
           percentage: percentage,
-          lastUpdated: data.lastUpdated ? new Date(data.lastUpdated) : new Date()
+          lastUpdated: new Date()
         });
         
         // Update seat availability if available
-        if (data.seatMap) {
-          setSeatAvailability(data.seatMap);
+        if (seatMap.length > 0) {
+          // Create a new seat map with the first N seats occupied based on currentPassengers
+          const updatedSeatMap = seatMap.map((seat, index) => ({
+            ...seat,
+            isOccupied: index < currentPassengers
+          }));
+          setSeatAvailability(updatedSeatMap);
+        } else {
+          // Generate a default seat map if none exists
+          const defaultSeatMap = Array.from({ length: totalCapacity }, (_, i) => ({
+            seatNumber: i + 1,
+            isOccupied: i < currentPassengers
+          }));
+          setSeatAvailability(defaultSeatMap);
         }
         
         // Animate progress bar - use a local reference to avoid memory leaks
@@ -52,18 +74,26 @@ const BusCapacityIndicator = ({ isDark, routeNumber }) => {
         });
         
         animation.start();
-      }
+        setLoading(false);
+      }, (error) => {
+        console.error('Error in bus capacity listener:', error);
+        setLoading(false);
+      });
       
-      setLoading(false);
+      // Return the unsubscribe function
+      return () => {
+        console.log('Cleaning up bus capacity listener');
+        unsubscribe();
+      };
     }, (error) => {
-      console.error('Error in bus capacity listener:', error);
+      console.error('Error in total capacity listener:', error);
       setLoading(false);
     });
     
-    // Cleanup function
+    // Cleanup function will be handled by the inner onValue listener
     return () => {
-      console.log('Cleaning up bus capacity listener');
-      unsubscribe();
+      console.log('Cleaning up capacity listeners');
+      // The inner onValue listener will handle its own cleanup
     };
   }, [routeNumber]);
 

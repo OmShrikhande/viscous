@@ -7,6 +7,7 @@ import { Animated, RefreshControl, SafeAreaView, ScrollView, StatusBar, StyleShe
 import BusStopNotifications from '../../components/home/BusStopNotifications'
 import BusStopTimeline from '../../components/home/BusStopTimeline'
 import BusCapacityIndicator from '../../components/home/BusCapacityIndicator'
+import TrackingManager from '../../components/tracking/TrackingManager'
 import Header from '../../components/home/Header'
 import UserDataManager from '../../components/usefulComponent/UserDataManager'
 import { firestoreDb } from '../../configs/FirebaseConfigs'
@@ -127,6 +128,7 @@ export default function Home() {
             ]}
           >
             <BusStopNotifications isDark={isDark} />
+            <TrackingManager isDark={isDark} />
             <BusCapacityIndicator isDark={isDark} routeNumber={userRouteNumber} />
             <BusStopTimeline isDark={isDark} />
           </Animated.View>
