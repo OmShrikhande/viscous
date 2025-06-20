@@ -15,6 +15,7 @@ import Animated, {
 import EditProfileForm from '../../components/Profile/EditProfileForm';
 import MenuList from '../../components/Profile/MenuList';
 import BusNotificationsToggle from '../../components/Profile/BusNotificationsToggle';
+import SpeedMonitoringToggle from '../../components/Profile/SpeedMonitoringToggle';
 import TestNotifications from '../../components/usefulComponent/TestNotifications';
 import ThemeToggleSwitch from '../../components/usefulComponent/ThemeToggleSwitch';
 
@@ -231,6 +232,16 @@ export default function Profile() {
         entering={FadeInDown.delay(700).springify()}
       >
         <BusNotificationsToggle
+          isDark={isDark}
+          userEmail={userEmail}
+        />
+      </Animated.View>
+
+      {/* Speed Monitoring Toggle */}
+      <Animated.View
+        entering={FadeInDown.delay(750).springify()}
+      >
+        <SpeedMonitoringToggle
           isDark={isDark}
           userEmail={userEmail}
         />

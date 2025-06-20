@@ -10,6 +10,7 @@ import { realtimeDatabase } from '../configs/FirebaseConfigs';
 export const BACKGROUND_NOTIFICATION_TASK = 'BACKGROUND_NOTIFICATION_TASK';
 export const BACKGROUND_BUS_LOCATION_TASK = 'BACKGROUND_BUS_LOCATION_TASK';
 export const BACKGROUND_ADMIN_ALERTS_TASK = 'BACKGROUND_ADMIN_ALERTS_TASK';
+export const BACKGROUND_SPEED_MONITOR_TASK = 'BACKGROUND_SPEED_MONITOR_TASK';
 
 // Register background notification handler
 TaskManager.defineTask(BACKGROUND_NOTIFICATION_TASK, ({ data, error }) => {
@@ -92,6 +93,69 @@ TaskManager.defineTask(BACKGROUND_BUS_LOCATION_TASK, async () => {
     });
   } catch (error) {
     console.error('Background bus location task error:', error);
+    return BackgroundFetch.BackgroundFetchResult.Failed;
+  }
+});
+
+// Register background speed monitoring task
+TaskManager.defineTask(BACKGROUND_SPEED_MONITOR_TASK, async () => {
+  try {
+    console.log('🔄 Background speed monitoring task running');
+    
+    // Check if speed monitoring is enabled
+    const userDataJson = await AsyncStorage.getItem('userData');
+    if (userDataJson) {
+      const userData = JSON.parse(userDataJson);
+      if (userData.speedMonitoring === false) {
+        console.log('Speed monitoring is disabled in user preferences');
+        return BackgroundFetch.BackgroundFetchResult.NoData;
+      }
+    }
+    
+    // Get the current speed directly from the database
+    const speedRef = ref(realtimeDatabase, '/bus/Location/Speed');
+    const snapshot = await get(speedRef);
+    const speed = snapshot.val();
+    
+    console.log(`Current speed from background task: ${speed}`);
+    
+    // Check if speed exceeds threshold
+    const SPEED_THRESHOLD = 65;
+    if (speed && parseFloat(speed) > SPEED_THRESHOLD) {
+      // Get the last notification time to avoid spamming
+      const lastNotificationTimeStr = await AsyncStorage.getItem('lastSpeedNotificationTime');
+      const lastNotificationTime = lastNotificationTimeStr ? parseInt(lastNotificationTimeStr) : 0;
+      const now = Date.now();
+      
+      // Only send notification if it's been at least 1 minute since the last one
+      if (now - lastNotificationTime > 60000) {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: 'Bus Speed Alert',
+            body: `The bus is traveling at ${parseFloat(speed).toFixed(1)} km/h, which exceeds the safe limit of ${SPEED_THRESHOLD} km/h.`,
+            data: { screen: 'map', speedAlert: true },
+            // Android specific properties
+            ...(Platform.OS === 'android' && { 
+              channelId: 'bus-tracker',
+              priority: 'max',
+              vibrationPattern: [0, 250, 250, 250],
+              color: '#FF0000',
+            }),
+          },
+          trigger: null, // Send immediately
+        });
+        
+        // Update the last notification time
+        await AsyncStorage.setItem('lastSpeedNotificationTime', now.toString());
+        console.log('✅ Speed alert notification sent from background task');
+        
+        return BackgroundFetch.BackgroundFetchResult.NewData;
+      }
+    }
+    
+    return BackgroundFetch.BackgroundFetchResult.NoData;
+  } catch (error) {
+    console.error('Error in background speed monitoring task:', error);
     return BackgroundFetch.BackgroundFetchResult.Failed;
   }
 });
@@ -330,6 +394,13 @@ export const registerBackgroundTasks = async () => {
     console.log('Registering background fetch for admin alerts...');
     await BackgroundFetch.registerTaskAsync(BACKGROUND_ADMIN_ALERTS_TASK, {
       minimumInterval: 15 * 60, // 15 minutes
+      stopOnTerminate: false,
+      startOnBoot: true,
+    });
+    
+    console.log('Registering background fetch for speed monitoring...');
+    await BackgroundFetch.registerTaskAsync(BACKGROUND_SPEED_MONITOR_TASK, {
+      minimumInterval: 30, // 30 seconds for speed monitoring (more frequent)
       stopOnTerminate: false,
       startOnBoot: true,
     });

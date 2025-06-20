@@ -14,8 +14,7 @@ import { firestoreDb } from '../../configs/FirebaseConfigs'
 import { Colors } from '../../constants/Colors'
 import { initializeNotifications } from '../../utils/notificationHelper'
 
-
-const Home = () => {
+export default function  Home() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('timeline');
   const [isDark, setIsDark] = useState(false);
@@ -128,10 +127,10 @@ const Home = () => {
               { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
             ]}
           >
-            <BusStopNotifications isDark={isDark} />
+            {/* <BusStopNotifications isDark={isDark} /> */}
             <TrackingManager isDark={isDark} />
-            <BusCapacityIndicator isDark={isDark} routeNumber={userRouteNumber} />
             <BusStopTimeline isDark={isDark} />
+            <BusCapacityIndicator isDark={isDark} routeNumber={userRouteNumber} />
           </Animated.View>
         );
       case 'map':
@@ -445,6 +444,3 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
 })
-
-
-export default Home;

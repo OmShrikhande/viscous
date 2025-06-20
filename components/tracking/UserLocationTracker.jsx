@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, AppState } from 'react-native';
 import * as Location from 'expo-location';
 import { onValue, ref, set, get } from 'firebase/database';
-import { doc, updateDoc, getDoc, increment } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, increment,onSnapshot } from 'firebase/firestore';
 import { realtimeDatabase, firestoreDb } from '../../configs/FirebaseConfigs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as TaskManager from 'expo-task-manager';
