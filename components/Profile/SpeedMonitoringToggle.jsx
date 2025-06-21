@@ -3,6 +3,9 @@ import * as BackgroundFetch from 'expo-background-fetch';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Switch, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { firestoreDb } from '../../configs/FirebaseConfigs';
 import { BACKGROUND_SPEED_MONITOR_TASK, registerBackgroundTasks } from '../../utils/backgroundTasks';
 
@@ -95,57 +98,79 @@ const SpeedMonitoringToggle = ({ isDark, userEmail }) => {
     }
   };
 
+  // Styles based on theme
+  const textColor = isDark ? '#fff' : '#000';
+  const descriptionColor = isDark ? '#aaa' : '#666';
+
   return (
-    <View style={[styles.container, isDark && styles.containerDark]}>
-      <Text style={[styles.title, isDark && styles.textDark]}>Speed Monitoring</Text>
-      
-      <View style={styles.row}>
-        <Text style={[styles.description, isDark && styles.textDark]}>
-          Receive notifications when bus speed exceeds 65 km/h
-        </Text>
+    <Animated.View 
+      entering={FadeIn.duration(400)}
+      style={styles.container}
+    >
+      <BlurView 
+        intensity={30} 
+        style={styles.blurContainer} 
+        tint={isDark ? 'dark' : 'light'}
+      >
+        <View style={styles.header}>
+          <Ionicons 
+            name="speedometer-outline" 
+            size={24} 
+            color={isEnabled ? '#1E90FF' : descriptionColor} 
+          />
+          <Text style={[styles.title, { color: textColor }]}>
+            Speed Monitoring
+          </Text>
+          <Switch
+            value={isEnabled}
+            onValueChange={toggleSwitch}
+            trackColor={{ false: '#767577', true: '#81b0ff' }}
+            thumbColor={isEnabled ? '#1E90FF' : '#f4f3f4'}
+            disabled={isLoading}
+          />
+        </View>
         
-        <Switch
-          trackColor={{ false: '#767577', true: '#81b0ff' }}
-          thumbColor={isEnabled ? '#0a7ea4' : '#f4f3f4'}
-          ios_backgroundColor="#3e3e3e"
-          onValueChange={toggleSwitch}
-          value={isEnabled}
-          disabled={isLoading}
-        />
-      </View>
-    </View>
+        <Text style={[styles.description, { color: descriptionColor }]}>
+          {isEnabled 
+            ? 'You will receive notifications when bus speed exceeds 65 km/h.'
+            : 'Speed monitoring is disabled. Toggle the switch to receive alerts.'}
+        </Text>
+      </BlurView>
+    </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
+    marginVertical: 10,
+    borderRadius: 16,
+    overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  blurContainer: {
     padding: 16,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 10,
-    marginVertical: 8,
-    marginHorizontal: 16,
   },
-  containerDark: {
-    backgroundColor: '#1E1E1E',
-  },
-  title: {
-    fontSize: 18,
-    fontFamily: 'flux-bold',
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 8,
   },
-  textDark: {
-    color: '#fff',
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  title: {
+    fontSize: 16,
+    fontFamily: 'flux-bold',
+    flex: 1,
+    marginLeft: 10,
   },
   description: {
     fontSize: 14,
     fontFamily: 'flux',
-    flex: 1,
-    marginRight: 16,
+    marginLeft: 34,
+    opacity: 0.8,
   },
 });
 

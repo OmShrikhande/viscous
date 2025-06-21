@@ -6,22 +6,22 @@ import { useRouter } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
-  Dimensions,
-  FlatList,
-  Image,
-  Share,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  useColorScheme
+    Dimensions,
+    Image,
+    Share,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    useColorScheme,
+    View
 } from 'react-native';
 import Animated, {
-  FadeInDown,
-  useAnimatedStyle,
-  useSharedValue,
-  withSequence,
-  withTiming,
-  ZoomIn
+    FadeInDown,
+    useAnimatedStyle,
+    useSharedValue,
+    withSequence,
+    withTiming,
+    ZoomIn
 } from 'react-native-reanimated';
 import { firestoreDb } from '../../configs/FirebaseConfigs';
 import { Colors } from '../../constants/Colors';
@@ -153,51 +153,39 @@ export default function MenuList({ isDark }) {
       style={styles.container}
       entering={FadeInDown.duration(800).springify()}
     >
-      <FlatList
-        data={menulist}
-        numColumns={2}
-        keyExtractor={(item) => item.id.toString()}
-        columnWrapperStyle={{ justifyContent: 'space-between' }}
-        renderItem={({ item, index }) => {
-          return (
-            <Animated.View
-              entering={ZoomIn.delay(index * 200).springify()}
-              style={getStyleForIndex(index)}
+      <View style={styles.menuGrid}>
+        {menulist.map((item, index) => (
+          <Animated.View
+            key={item.id.toString()}
+            entering={ZoomIn.delay(index * 200).springify()}
+            style={getStyleForIndex(index)}
+          >
+            <TouchableOpacity
+              onPress={() => onMenuClick(item, index)}
+              activeOpacity={0.8}
             >
-              <TouchableOpacity
-                onPress={() => onMenuClick(item, index)}
-                activeOpacity={0.8}
+              <BlurView
+                intensity={20}
+                tint={currentTheme ? 'dark' : 'light'}
+                style={[
+                  styles.card,
+                  {
+                    borderColor: currentTheme ? Colors.PRIMARY : Colors.SECONDARY,
+                  },
+                ]}
               >
-                <BlurView
-                  intensity={20}
-                  tint={currentTheme ? 'dark' : 'light'}
-                  style={[
-                    styles.card,
-                    {
-                      borderColor: currentTheme ? Colors.PRIMARY : Colors.SECONDARY,
-                    },
-                  ]}
-                >
-                  <Image source={item.icon} style={styles.icon} />
-                  <Text style={[styles.name, { color: currentTheme ? Colors.PRIMARY : Colors.SECONDARY }]}>
-                    {item.name}
-                  </Text>
-                  <Text style={[styles.description, { color: currentTheme ? '#aaa' : '#666' }]}>
-                    {item.description}
-                  </Text>
-                </BlurView>
-              </TouchableOpacity>
-            </Animated.View>
-          );
-        }}
-      />
-
-      <Animated.Text 
-        style={[styles.footerText, { color: currentTheme ? Colors.PRIMARY : Colors.SECONDARY }]}
-        entering={FadeInDown.delay(600).springify()}
-      >
-        Made with ❤️ by Om Shrikhande
-      </Animated.Text>
+                <Image source={item.icon} style={styles.icon} />
+                <Text style={[styles.name, { color: currentTheme ? Colors.PRIMARY : Colors.SECONDARY }]}>
+                  {item.name}
+                </Text>
+                <Text style={[styles.description, { color: currentTheme ? '#aaa' : '#666' }]}>
+                  {item.description}
+                </Text>
+              </BlurView>
+            </TouchableOpacity>
+          </Animated.View>
+        ))}
+      </View>
     </Animated.View>
   );
 }
@@ -206,12 +194,17 @@ const { width } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 20,
-    paddingBottom: 30,
+    marginTop: 10,
+    paddingBottom: 10,
+  },
+  menuGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   card: {
-    flex: 1,
-    margin: 10,
+    margin: 8,
     padding: 20,
     borderRadius: 20,
     borderWidth: 2,
@@ -243,11 +236,5 @@ const styles = StyleSheet.create({
     fontFamily: 'flux-medium',
     textAlign: 'center',
     opacity: 0.8,
-  },
-  footerText: {
-    fontSize: 16,
-    fontFamily: 'flux-bold',
-    textAlign: 'center',
-    marginTop: 40,
   },
 });

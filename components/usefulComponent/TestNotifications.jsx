@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Button, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import {
   initializeNotifications,
   requestNotificationPermissions,
@@ -65,98 +68,137 @@ export default function TestNotifications({ isDark }) {
     }
   };
 
+  // Styles based on theme
+  const textColor = isDark ? '#fff' : '#000';
+  const descriptionColor = isDark ? '#aaa' : '#666';
+  const buttonBgColor = isDark ? '#2a2a2a' : '#f0f0f0';
+  const buttonActiveBgColor = '#1E90FF';
+
   return (
-    <View style={[styles.container, isDark && styles.containerDark]}>
-      <Text style={[styles.title, isDark && styles.textDark]}>Notification Test</Text>
-      
-      <View style={[styles.statusContainer, isDark && styles.statusContainerDark]}>
-        <Text style={[styles.label, isDark && styles.textDark]}>Permission Status:</Text>
-        <Text style={[
-          styles.status,
-          permissionStatus === 'granted' && styles.granted,
-          permissionStatus === 'denied' && styles.denied,
-          permissionStatus === 'error' && styles.error
-        ]}>
-          {permissionStatus}
-        </Text>
-      </View>
+    <Animated.View 
+      entering={FadeIn.duration(400)}
+      style={styles.container}
+    >
+      <BlurView 
+        intensity={30} 
+        style={styles.blurContainer} 
+        tint={isDark ? 'dark' : 'light'}
+      >
+        <View style={styles.header}>
+          <Ionicons 
+            name="notifications-circle-outline" 
+            size={24} 
+            color={permissionStatus === 'granted' ? '#1E90FF' : descriptionColor} 
+          />
+          <Text style={[styles.title, { color: textColor }]}>
+            Notification Test
+          </Text>
+        </View>
+        
+        <View style={[styles.statusContainer, { backgroundColor: isDark ? '#2a2a2a' : '#f9f9f9' }]}>
+          <Text style={[styles.label, { color: textColor }]}>Permission Status:</Text>
+          <Text style={[
+            styles.status,
+            permissionStatus === 'granted' && styles.granted,
+            permissionStatus === 'denied' && styles.denied,
+            permissionStatus === 'error' && styles.error
+          ]}>
+            {permissionStatus}
+          </Text>
+        </View>
 
-      <View style={styles.buttonContainer}>
-        <Button 
-          title="Check Permissions" 
-          onPress={checkPermissions} 
-          color={isDark ? '#1E90FF' : undefined}
-        />
-      </View>
+        <View style={styles.buttonGrid}>
+          <TouchableOpacity 
+            style={[styles.button, { backgroundColor: buttonBgColor }]}
+            onPress={checkPermissions}
+          >
+            <Ionicons name="shield-checkmark-outline" size={20} color={isDark ? '#1E90FF' : '#1E90FF'} />
+            <Text style={[styles.buttonText, { color: textColor }]}>Check Permissions</Text>
+          </TouchableOpacity>
 
-      <View style={styles.buttonContainer}>
-        <Button 
-          title="Initialize Notifications" 
-          onPress={handleInitialize} 
-          color={isDark ? '#1E90FF' : undefined}
-        />
-      </View>
+          <TouchableOpacity 
+            style={[styles.button, { backgroundColor: buttonBgColor }]}
+            onPress={handleInitialize}
+          >
+            <Ionicons name="refresh-outline" size={20} color={isDark ? '#1E90FF' : '#1E90FF'} />
+            <Text style={[styles.buttonText, { color: textColor }]}>Initialize</Text>
+          </TouchableOpacity>
 
-      <View style={styles.buttonContainer}>
-        <Button 
-          title="Send Test Notification" 
-          onPress={handleSendNotification}
-          disabled={permissionStatus !== 'granted'} 
-          color={isDark ? '#1E90FF' : undefined}
-        />
-      </View>
+          <TouchableOpacity 
+            style={[
+              styles.button, 
+              { backgroundColor: permissionStatus === 'granted' ? buttonActiveBgColor : buttonBgColor }
+            ]}
+            onPress={handleSendNotification}
+            disabled={permissionStatus !== 'granted'}
+          >
+            <Ionicons 
+              name="paper-plane-outline" 
+              size={20} 
+              color={permissionStatus === 'granted' ? '#fff' : descriptionColor} 
+            />
+            <Text style={[
+              styles.buttonText, 
+              { color: permissionStatus === 'granted' ? '#fff' : descriptionColor }
+            ]}>
+              Send Test
+            </Text>
+          </TouchableOpacity>
+        </View>
 
-      {notificationSent && (
-        <Text style={[styles.sentText, isDark && styles.textDark]}>
-          Notification sent! If you don't see a system notification, check your device settings.
-        </Text>
-      )}
-      
-      {/* Special emulator test component */}
-      {!Device.isDevice && (
-        <EmulatorNotificationTest isDark={isDark} />
-      )}
-    </View>
+        {notificationSent && (
+          <Text style={[styles.sentText, { color: descriptionColor }]}>
+            Notification sent! If you don't see it, check your device settings.
+          </Text>
+        )}
+        
+        {/* Special emulator test component */}
+        {!Device.isDevice && (
+          <EmulatorNotificationTest isDark={isDark} />
+        )}
+      </BlurView>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: 20,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 10,
-    margin: 10,
+    marginVertical: 10,
+    borderRadius: 16,
+    overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
-  containerDark: {
-    backgroundColor: '#1E1E1E',
+  blurContainer: {
+    padding: 16,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   title: {
-    fontSize: 18,
+    fontSize: 16,
     fontFamily: 'flux-bold',
-    marginBottom: 15,
-    textAlign: 'center',
-  },
-  textDark: {
-    color: '#fff',
+    marginLeft: 10,
   },
   statusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 15,
     justifyContent: 'space-between',
-    backgroundColor: '#fff',
     padding: 10,
-    borderRadius: 5,
-  },
-  statusContainerDark: {
-    backgroundColor: '#2a2a2a',
+    borderRadius: 10,
   },
   label: {
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: 'flux',
   },
   status: {
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: 'flux-bold',
   },
   granted: {
@@ -168,14 +210,31 @@ const styles = StyleSheet.create({
   error: {
     color: '#FF9800',
   },
-  buttonContainer: {
-    marginBottom: 15,
+  buttonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  button: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 10,
+    width: '31%',
+  },
+  buttonText: {
+    fontSize: 12,
+    fontFamily: 'flux-bold',
+    marginLeft: 5,
   },
   sentText: {
-    marginTop: 10,
-    color: '#666',
+    marginTop: 5,
     textAlign: 'center',
     fontStyle: 'italic',
     fontFamily: 'flux',
+    fontSize: 12,
   },
 });

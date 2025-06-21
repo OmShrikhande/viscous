@@ -1,24 +1,34 @@
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Dimensions,
+  Platform,
+  SafeAreaView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
 import Animated, {
-    FadeIn,
-    FadeInDown,
-    FadeInUp,
-    useAnimatedStyle,
-    useSharedValue,
-    withSpring,
-    withTiming
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming
 } from 'react-native-reanimated';
 
+import BusNotificationsToggle from '../../components/Profile/BusNotificationsToggle';
 import EditProfileForm from '../../components/Profile/EditProfileForm';
 import MenuList from '../../components/Profile/MenuList';
-import BusNotificationsToggle from '../../components/Profile/BusNotificationsToggle';
 import SpeedMonitoringToggle from '../../components/Profile/SpeedMonitoringToggle';
 import TestNotifications from '../../components/usefulComponent/TestNotifications';
 import ThemeToggleSwitch from '../../components/usefulComponent/ThemeToggleSwitch';
-
 
 export default function Profile() {
   const [userEmail, setUserEmail] = useState(null);
@@ -37,31 +47,31 @@ export default function Profile() {
   const cardOpacity = useSharedValue(0);
   const profileInfoY = useSharedValue(20);
   
-  useEffect(() => {
-    const loadUserData = async () => {
-      try {
-        const storedData = await AsyncStorage.getItem('userData');
-        console.log('🔍 Loading user data from AsyncStorage:', storedData);
-        if (storedData) {
-          const parsed = JSON.parse(storedData);
-          setUserEmail(parsed.email);
-          console.log('📧 User Email:', parsed.email);
-          setUserName(parsed.name || 'No Name');
-          setUserImage(parsed.image || null);
-          setPhoneNumber(parsed.phoneNumber || '');
-          setRouteNumber(parsed.routeNumber || '');
-          setBusStop(parsed.busStop || '');
-          setLastUpdated(parsed.lastUpdated ? new Date(parsed.lastUpdated) : null);
-          setIsDark(parsed.isDark);
-        }
-      } catch (err) {
-        console.error('❌ Failed to load user data:', err);
+  // Load user data from AsyncStorage
+  const loadUserData = useCallback(async () => {
+    try {
+      const storedData = await AsyncStorage.getItem('userData');
+      console.log('🔍 Loading user data from AsyncStorage');
+      if (storedData) {
+        const parsed = JSON.parse(storedData);
+        setUserEmail(parsed.email);
+        setUserName(parsed.name || 'No Name');
+        setUserImage(parsed.image || null);
+        setPhoneNumber(parsed.phoneNumber || '');
+        setRouteNumber(parsed.routeNumber || '');
+        setBusStop(parsed.busStop || '');
+        setLastUpdated(parsed.lastUpdated ? new Date(parsed.lastUpdated) : null);
+        setIsDark(parsed.isDark);
       }
-      setIsLoading(false);
-    };
-
-    loadUserData();
+    } catch (err) {
+      console.error('❌ Failed to load user data:', err);
+    }
+    setIsLoading(false);
   }, []);
+
+  useEffect(() => {
+    loadUserData();
+  }, [loadUserData]);
   
   // Separate useEffect for animations to avoid dependency warnings
   useEffect(() => {
@@ -71,7 +81,7 @@ export default function Profile() {
       cardOpacity.value = withTiming(1, { duration: 800 });
       profileInfoY.value = withTiming(0, { duration: 600 });
     }
-  }, [isLoading]);
+  }, [isLoading, avatarScale, cardOpacity, profileInfoY]);
   
   // Animated styles
   const avatarAnimatedStyle = useAnimatedStyle(() => {
@@ -106,170 +116,220 @@ export default function Profile() {
 
   if (isLoading) {
     return (
-      <Animated.View 
-        style={[styles.centeredContainer, themeStyles]}
-        entering={FadeIn.duration(800)}
-      >
-        <BlurView intensity={50} style={styles.blurContainer} tint={isDark ? 'dark' : 'light'}>
-          <ActivityIndicator size="large" color={isDark ? '#fff' : '#000'} />
-          <Animated.Text 
-            style={[textColor, styles.loadingText]}
-            entering={FadeInDown.delay(300).springify()}
-          >
-            Loading your profile...
-          </Animated.Text>
-        </BlurView>
-      </Animated.View>
+      <SafeAreaView style={[styles.safeArea, themeStyles]}>
+        <Animated.View 
+          style={styles.centeredContainer}
+          entering={FadeIn.duration(800)}
+        >
+          <BlurView intensity={50} style={styles.blurContainer} tint={isDark ? 'dark' : 'light'}>
+            <ActivityIndicator size="large" color={isDark ? '#fff' : '#000'} />
+            <Animated.Text 
+              style={[textColor, styles.loadingText]}
+              entering={FadeInDown.delay(300).springify()}
+            >
+              Loading your profile...
+            </Animated.Text>
+          </BlurView>
+        </Animated.View>
+      </SafeAreaView>
     );
   }
 
   if (!userEmail) {
     return (
-      <Animated.View 
-        style={[styles.centeredContainer, themeStyles]}
-        entering={FadeIn.duration(800)}
-      >
-        <Animated.Text 
-          style={[textColor, styles.notFoundText]}
-          entering={FadeInDown.delay(200).springify()}
-        >
-          ⚠️ User not found. Please login again.
-        </Animated.Text>
+      <SafeAreaView style={[styles.safeArea, themeStyles]}>
         <Animated.View 
-          style={styles.menuContainer}
-          entering={FadeInUp.delay(400).springify()}
+          style={styles.centeredContainer}
+          entering={FadeIn.duration(800)}
         >
-          <MenuList isDark={isDark} />
+          <Animated.Text 
+            style={[textColor, styles.notFoundText]}
+            entering={FadeInDown.delay(200).springify()}
+          >
+            ⚠️ User not found. Please login again.
+          </Animated.Text>
+          <Animated.View 
+            style={styles.menuContainer}
+            entering={FadeInUp.delay(400).springify()}
+          >
+            <MenuList isDark={isDark} />
+          </Animated.View>
         </Animated.View>
-      </Animated.View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <Animated.ScrollView 
-      style={[styles.container, themeStyles]} 
-      contentContainerStyle={{ paddingBottom: 40 }}
-      entering={FadeIn.duration(800)}
-      showsVerticalScrollIndicator={false}
-    >
-      <Animated.View 
-        style={[styles.profileCard, cardAnimatedStyle]}
-        entering={FadeInDown.delay(200).springify()}
-      >
-        <BlurView 
-          intensity={30} 
-          style={styles.profileCardBlur} 
-          tint={isDark ? 'dark' : 'light'}
-        >
-          <Animated.Image
-            source={
-              userImage
-                ? { uri: userImage }
-                : require('./../../assets/images/react-logo.png') // placeholder
-            }
-            style={[styles.avatar, avatarAnimatedStyle]}
-          />
-          <Animated.View style={profileInfoAnimatedStyle}>
-            <Text style={[styles.name, textColor]}>{userName}</Text>
-            <Text style={[styles.email, textColor]}>{userEmail}</Text>
-            
-            {phoneNumber && (
-              <View style={styles.infoContainer}>
-                <Text style={[styles.infoLabel, textColor]}>Phone:</Text>
-                <Text style={[styles.infoValue, textColor]}>{phoneNumber}</Text>
-              </View>
-            )}
-            
-            {routeNumber && (
-              <View style={styles.infoContainer}>
-                <Text style={[styles.infoLabel, textColor]}>Route Number:</Text>
-                <Text style={[styles.infoValue, textColor]}>{routeNumber}</Text>
-              </View>
-            )}
-            
-            {busStop && (
-              <View style={styles.infoContainer}>
-                <Text style={[styles.infoLabel, textColor]}>Bus Stop:</Text>
-                <Text style={[styles.infoValue, textColor]}>{busStop}</Text>
-              </View>
-            )}
-            
-            {lastUpdated && (
-              <Text style={[styles.lastUpdated, { color: isDark ? '#aaa' : '#888' }]}>
-                Last updated: {lastUpdated.toLocaleDateString()}
-              </Text>
-            )}
-            
-            <TouchableOpacity
-              style={[styles.editButton, { backgroundColor: isDark ? '#1E90FF' : '#1E90FF' }]}
-              onPress={() => setShowEditProfile(true)}
+    <SafeAreaView style={[styles.safeArea, themeStyles]}>
+      <Animated.FlatList
+        data={[1]} // Using a single item to render the content
+        keyExtractor={() => "profile-content"}
+        renderItem={() => (
+          <View style={styles.contentContainer}>
+            {/* Profile Card */}
+            <Animated.View 
+              style={[styles.profileCard, cardAnimatedStyle]}
+              entering={FadeInDown.delay(200).springify()}
             >
-              <Text style={styles.editButtonText}>Edit Profile</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </BlurView>
-      </Animated.View>
+              <BlurView 
+                intensity={30} 
+                style={styles.profileCardBlur} 
+                tint={isDark ? 'dark' : 'light'}
+              >
+                <Animated.Image
+                  source={
+                    userImage
+                      ? { uri: userImage }
+                      : require('./../../assets/images/react-logo.png') // placeholder
+                  }
+                  style={[styles.avatar, avatarAnimatedStyle]}
+                />
+                <Animated.View style={profileInfoAnimatedStyle}>
+                  <Text style={[styles.name, textColor]}>{userName}</Text>
+                  <Text style={[styles.email, textColor]}>{userEmail}</Text>
+                  
+                  <View style={styles.infoGrid}>
+                    {phoneNumber && (
+                      <View style={styles.infoCard}>
+                        <Ionicons name="call-outline" size={18} color={isDark ? '#1E90FF' : '#1E90FF'} />
+                        <Text style={[styles.infoLabel, textColor]}>Phone</Text>
+                        <Text style={[styles.infoValue, textColor]}>{phoneNumber}</Text>
+                      </View>
+                    )}
+                    
+                    {routeNumber && (
+                      <View style={styles.infoCard}>
+                        <Ionicons name="bus-outline" size={18} color={isDark ? '#1E90FF' : '#1E90FF'} />
+                        <Text style={[styles.infoLabel, textColor]}>Route</Text>
+                        <Text style={[styles.infoValue, textColor]}>{routeNumber}</Text>
+                      </View>
+                    )}
+                    
+                    {busStop && (
+                      <View style={styles.infoCard}>
+                        <Ionicons name="location-outline" size={18} color={isDark ? '#1E90FF' : '#1E90FF'} />
+                        <Text style={[styles.infoLabel, textColor]}>Bus Stop</Text>
+                        <Text style={[styles.infoValue, textColor]}>{busStop}</Text>
+                      </View>
+                    )}
+                  </View>
+                  
+                  {lastUpdated && (
+                    <Text style={[styles.lastUpdated, { color: isDark ? '#aaa' : '#888' }]}>
+                      Last updated: {lastUpdated.toLocaleDateString()}
+                    </Text>
+                  )}
+                  
+                  <TouchableOpacity
+                    style={[styles.editButton, { backgroundColor: isDark ? '#1E90FF' : '#1E90FF' }]}
+                    onPress={() => setShowEditProfile(true)}
+                  >
+                    <Ionicons name="create-outline" size={16} color="#fff" style={styles.buttonIcon} />
+                    <Text style={styles.editButtonText}>Edit Profile</Text>
+                  </TouchableOpacity>
+                </Animated.View>
+              </BlurView>
+            </Animated.View>
 
-      {/* Divider */}
-      <Animated.View 
-        style={[styles.divider, { backgroundColor: isDark ? '#444' : '#ccc' }]}
-        entering={FadeInDown.delay(400).springify()}
+            {/* Divider */}
+            <Animated.View 
+              style={[styles.divider, { backgroundColor: isDark ? '#444' : '#ccc' }]}
+              entering={FadeInDown.delay(400).springify()}
+            />
+
+            {/* Settings Section */}
+            <Animated.View 
+              style={styles.sectionContainer}
+              entering={FadeInDown.delay(500).springify()}
+            >
+              <View style={styles.sectionHeader}>
+                <Ionicons name="settings-outline" size={22} color={isDark ? '#1E90FF' : '#1E90FF'} />
+                <Text style={[styles.sectionTitle, textColor]}>Settings</Text>
+              </View>
+
+              {/* Theme Toggle */}
+              <Animated.View
+                entering={FadeInDown.delay(600).springify()}
+              >
+                <ThemeToggleSwitch
+                  currentValue={isDark}
+                  userEmail={userEmail}
+                  onToggle={(newVal) => setIsDark(newVal)}
+                />
+              </Animated.View>
+              
+              {/* Bus Notifications Toggle */}
+              <Animated.View
+                entering={FadeInDown.delay(700).springify()}
+              >
+                <BusNotificationsToggle
+                  isDark={isDark}
+                  userEmail={userEmail}
+                />
+              </Animated.View>
+
+              {/* Speed Monitoring Toggle */}
+              <Animated.View
+                entering={FadeInDown.delay(750).springify()}
+              >
+                <SpeedMonitoringToggle
+                  isDark={isDark}
+                  userEmail={userEmail}
+                />
+              </Animated.View>
+            </Animated.View>
+
+            {/* Menu Section */}
+            <Animated.View 
+              style={styles.sectionContainer}
+              entering={FadeInDown.delay(800).springify()}
+            >
+              <View style={styles.sectionHeader}>
+                <Ionicons name="menu-outline" size={22} color={isDark ? '#1E90FF' : '#1E90FF'} />
+                <Text style={[styles.sectionTitle, textColor]}>Menu</Text>
+              </View>
+              
+              <Animated.View style={styles.menuContainer}>
+                <MenuList isDark={isDark} />
+              </Animated.View>
+            </Animated.View>
+
+            {/* Developer Tools Section */}
+            <Animated.View 
+              style={styles.sectionContainer}
+              entering={FadeInDown.delay(900).springify()}
+            >
+              <View style={styles.sectionHeader}>
+                <Ionicons name="code-outline" size={22} color={isDark ? '#1E90FF' : '#1E90FF'} />
+                <Text style={[styles.sectionTitle, textColor]}>Developer Tools</Text>
+              </View>
+              
+              <Animated.View style={styles.testNotificationsContainer}>
+                <TestNotifications isDark={isDark} />
+              </Animated.View>
+            </Animated.View>
+
+            {/* Footer */}
+            <Animated.View 
+              style={styles.footerContainer}
+              entering={FadeInDown.delay(1000).springify()}
+            >
+              <Text style={[styles.footer, { color: isDark ? '#aaa' : '#888' }]}>
+                Made with ❤️ by Om Shrikhande
+              </Text>
+              <Text style={[styles.version, { color: isDark ? '#777' : '#999' }]}>
+                Version 1.0.0
+              </Text>
+            </Animated.View>
+          </View>
+        )}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.flatListContent}
+        initialNumToRender={1}
+        maxToRenderPerBatch={1}
+        windowSize={3}
+        removeClippedSubviews={false}
       />
-
-      {/* Theme Toggle */}
-      <Animated.View
-        entering={FadeInDown.delay(600).springify()}
-      >
-        <ThemeToggleSwitch
-          currentValue={isDark}
-          userEmail={userEmail}
-          onToggle={(newVal) => setIsDark(newVal)}
-        />
-      </Animated.View>
-      
-      {/* Bus Notifications Toggle */}
-      <Animated.View
-        entering={FadeInDown.delay(700).springify()}
-      >
-        <BusNotificationsToggle
-          isDark={isDark}
-          userEmail={userEmail}
-        />
-      </Animated.View>
-
-      {/* Speed Monitoring Toggle */}
-      <Animated.View
-        entering={FadeInDown.delay(750).springify()}
-      >
-        <SpeedMonitoringToggle
-          isDark={isDark}
-          userEmail={userEmail}
-        />
-      </Animated.View>
-
-      {/* Menu List */}
-      <Animated.View 
-        style={styles.menuContainer}
-        entering={FadeInDown.delay(800).springify()}
-      >
-        <MenuList isDark={isDark} />
-      </Animated.View>
-
-      {/* Test Notifications Component */}
-      <Animated.View
-        style={styles.testNotificationsContainer}
-        entering={FadeInDown.delay(900).springify()}
-      >
-        <TestNotifications isDark={isDark} />
-      </Animated.View>
-
-      {/* Footer */}
-      <Animated.Text 
-        style={[styles.footer, { color: isDark ? '#aaa' : '#888' }]}
-        entering={FadeInDown.delay(1000).springify()}
-      >
-        Made with ❤️ by Om Shrikhande
-      </Animated.Text>
       
       {/* Edit Profile Modal */}
       <EditProfileForm
@@ -287,17 +347,24 @@ export default function Profile() {
         isDark={isDark}
         onUpdate={handleProfileUpdate}
       />
-    </Animated.ScrollView>
+    </SafeAreaView>
   );
 }
 
 const { width } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+  },
+  contentContainer: {
     paddingHorizontal: 20,
-    paddingTop: 30,
+    paddingTop: 20,
+    paddingBottom: 40,
+  },
+  flatListContent: {
+    flexGrow: 1,
   },
   centeredContainer: {
     flex: 1,
@@ -320,6 +387,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
+    width: '100%',
   },
   profileCardBlur: {
     width: '100%',
@@ -350,35 +418,52 @@ const styles = StyleSheet.create({
     opacity: 0.8,
     textAlign: 'center',
     marginTop: 5,
-    marginBottom: 10,
+    marginBottom: 15,
   },
-  infoContainer: {
+  infoGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 4,
-    width: '100%',
+    flexWrap: 'wrap',
     justifyContent: 'center',
+    marginTop: 5,
+    width: '100%',
+  },
+  infoCard: {
+    backgroundColor: 'rgba(30, 144, 255, 0.1)',
+    borderRadius: 12,
+    padding: 10,
+    margin: 5,
+    alignItems: 'center',
+    minWidth: width * 0.25,
+    maxWidth: width * 0.28,
   },
   infoLabel: {
-    fontSize: 14,
+    fontSize: 12,
     fontFamily: 'flux-bold',
-    marginRight: 5,
+    marginTop: 5,
   },
   infoValue: {
     fontSize: 14,
     fontFamily: 'flux-medium',
+    textAlign: 'center',
+    marginTop: 2,
   },
   lastUpdated: {
     fontSize: 12,
     fontFamily: 'flux',
-    marginTop: 10,
+    marginTop: 15,
     textAlign: 'center',
   },
   editButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
     borderRadius: 20,
     marginTop: 15,
+  },
+  buttonIcon: {
+    marginRight: 5,
   },
   editButtonText: {
     color: '#fff',
@@ -391,17 +476,39 @@ const styles = StyleSheet.create({
     width: '100%',
     borderRadius: 1,
   },
+  sectionContainer: {
+    marginBottom: 25,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+    paddingHorizontal: 5,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontFamily: 'flux-bold',
+    marginLeft: 8,
+  },
   menuContainer: {
-    marginTop: 10,
+    marginTop: 5,
   },
   testNotificationsContainer: {
-    marginTop: 20,
+    marginTop: 5,
+  },
+  footerContainer: {
+    marginTop: 30,
+    alignItems: 'center',
   },
   footer: {
-    marginTop: 40,
     textAlign: 'center',
     fontFamily: 'flux-medium',
     fontSize: 16,
+  },
+  version: {
+    marginTop: 5,
+    fontFamily: 'flux',
+    fontSize: 12,
   },
   blurContainer: {
     padding: 30,
@@ -420,5 +527,6 @@ const styles = StyleSheet.create({
     fontFamily: 'flux-medium',
     marginBottom: 30,
     textAlign: 'center',
+    paddingHorizontal: 20,
   },
 });
