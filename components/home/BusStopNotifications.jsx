@@ -228,8 +228,12 @@ const BusStopNotifications = ({ isDark }) => {
   const sendBusApproachingNotification = (currentStop, stopsAway) => {
     if (!notificationsEnabled) return;
     
+    // Add estimated time of 7 minutes for next stop
+    const estimatedTime = stopsAway === 1 ? "approximately 7 minutes" : 
+                         stopsAway === 2 ? "approximately 15 minutes" : "";
+    
     const title = `Bus Approaching Soon`;
-    const body = `Your bus is ${stopsAway} stop${stopsAway > 1 ? 's' : ''} away at ${currentStop}. Get ready!`;
+    const body = `Your bus is ${stopsAway} stop${stopsAway > 1 ? 's' : ''} away at ${currentStop}${estimatedTime ? ` (${estimatedTime})` : ''}. Get ready!`;
     
     sendLocalNotification(title, body, {
       data: { 
@@ -237,7 +241,8 @@ const BusStopNotifications = ({ isDark }) => {
         type: 'approaching',
         currentStop,
         userStop: userBusStop,
-        stopsAway
+        stopsAway,
+        estimatedTime: stopsAway === 1 ? 7 : stopsAway === 2 ? 15 : null
       }
     });
   };

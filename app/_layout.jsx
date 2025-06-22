@@ -7,11 +7,11 @@ import OnboardingScreen from "../components/OnboardingScreen.jsx";
 import * as SecureStore from 'expo-secure-store';
 import { useEffect, useRef } from "react";
 import {
-    addNotificationReceivedListener,
-    addNotificationResponseListener,
-    initializeNotifications,
-    removeAllNotificationListeners
-} from "../utils/notificationHelper";
+  addNotificationReceivedListener,
+  addNotificationResponseListener,
+  initializeNotifications,
+  removeAllNotificationListeners
+} from "../utils/notificationHelper.js";
 
 const tokenCache = {
   async getToken(key) {

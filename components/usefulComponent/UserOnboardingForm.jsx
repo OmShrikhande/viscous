@@ -4,19 +4,19 @@ import { BlurView } from 'expo-blur';
 import { collection, doc, getDocs, serverTimestamp, setDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { firestoreDb as db } from '../../configs/FirebaseConfigs';
 
 const { width } = Dimensions.get('window');
@@ -151,7 +151,7 @@ const UserOnboardingForm = ({ onComplete, isDark }) => {
         showsVerticalScrollIndicator={false}
       >
         <Animated.View 
-          entering={FadeIn.duration(800)}
+          entering={FadeIn.duration(500)}
           style={styles.formContainer}
         >
           <BlurView 
@@ -160,21 +160,21 @@ const UserOnboardingForm = ({ onComplete, isDark }) => {
             tint={isDark ? 'dark' : 'light'}
           >
             <Animated.Text 
-              entering={FadeInDown.delay(200).springify()}
+              entering={FadeIn.duration(500)}
               style={[styles.title, { color: textColor }]}
             >
               Welcome Aboard!
             </Animated.Text>
             
             <Animated.Text 
-              entering={FadeInDown.delay(300).springify()}
+              entering={FadeIn.duration(500).delay(100)}
               style={[styles.subtitle, { color: textColor }]}
             >
               Let's set up your profile
             </Animated.Text>
             
             <Animated.View 
-              entering={FadeInDown.delay(400).springify()}
+              entering={FadeIn.duration(500).delay(200)}
               style={styles.inputGroup}
             >
               <Text style={[styles.label, { color: textColor }]}>Full Name</Text>
@@ -188,7 +188,7 @@ const UserOnboardingForm = ({ onComplete, isDark }) => {
             </Animated.View>
             
             <Animated.View 
-              entering={FadeInDown.delay(500).springify()}
+              entering={FadeIn.duration(500).delay(300)}
               style={styles.inputGroup}
             >
               <Text style={[styles.label, { color: textColor }]}>Phone Number</Text>
@@ -203,7 +203,7 @@ const UserOnboardingForm = ({ onComplete, isDark }) => {
             </Animated.View>
             
             <Animated.View 
-              entering={FadeInDown.delay(600).springify()}
+              entering={FadeIn.duration(500).delay(400)}
               style={styles.inputGroup}
             >
               <Text style={[styles.label, { color: textColor }]}>Route Number (1-37)</Text>
@@ -225,7 +225,7 @@ const UserOnboardingForm = ({ onComplete, isDark }) => {
             </Animated.View>
             
             <Animated.View 
-              entering={FadeInDown.delay(700).springify()}
+              entering={FadeIn.duration(500).delay(500)}
               style={styles.inputGroup}
             >
               <Text style={[styles.label, { color: textColor }]}>Your Bus Stop</Text>
@@ -279,7 +279,7 @@ const UserOnboardingForm = ({ onComplete, isDark }) => {
             </Animated.View>
             
             <Animated.View 
-              entering={FadeInDown.delay(800).springify()}
+              entering={FadeIn.duration(500).delay(600)}
               style={styles.buttonContainer}
             >
               <TouchableOpacity

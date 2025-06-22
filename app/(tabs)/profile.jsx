@@ -15,8 +15,6 @@ import {
 } from 'react-native';
 import Animated, {
   FadeIn,
-  FadeInDown,
-  FadeInUp,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -125,7 +123,7 @@ export default function Profile() {
             <ActivityIndicator size="large" color={isDark ? '#fff' : '#000'} />
             <Animated.Text 
               style={[textColor, styles.loadingText]}
-              entering={FadeInDown.delay(300).springify()}
+              entering={FadeIn.duration(500).delay(300)}
             >
               Loading your profile...
             </Animated.Text>
@@ -144,13 +142,13 @@ export default function Profile() {
         >
           <Animated.Text 
             style={[textColor, styles.notFoundText]}
-            entering={FadeInDown.delay(200).springify()}
+            entering={FadeIn.duration(500).delay(200)}
           >
             ⚠️ User not found. Please login again.
           </Animated.Text>
           <Animated.View 
             style={styles.menuContainer}
-            entering={FadeInUp.delay(400).springify()}
+            entering={FadeIn.duration(500).delay(400)}
           >
             <MenuList isDark={isDark} />
           </Animated.View>
@@ -169,7 +167,7 @@ export default function Profile() {
             {/* Profile Card */}
             <Animated.View 
               style={[styles.profileCard, cardAnimatedStyle]}
-              entering={FadeInDown.delay(200).springify()}
+              entering={FadeIn.duration(500).delay(200)}
             >
               <BlurView 
                 intensity={30} 
@@ -234,13 +232,13 @@ export default function Profile() {
             {/* Divider */}
             <Animated.View 
               style={[styles.divider, { backgroundColor: isDark ? '#444' : '#ccc' }]}
-              entering={FadeInDown.delay(400).springify()}
+              entering={FadeIn.duration(500).delay(400)}
             />
 
             {/* Settings Section */}
             <Animated.View 
               style={styles.sectionContainer}
-              entering={FadeInDown.delay(500).springify()}
+              entering={FadeIn.duration(500).delay(500)}
             >
               <View style={styles.sectionHeader}>
                 <Ionicons name="settings-outline" size={22} color={isDark ? '#1E90FF' : '#1E90FF'} />
@@ -249,7 +247,7 @@ export default function Profile() {
 
               {/* Theme Toggle */}
               <Animated.View
-                entering={FadeInDown.delay(600).springify()}
+                entering={FadeIn.duration(500).delay(600)}
               >
                 <ThemeToggleSwitch
                   currentValue={isDark}
@@ -260,7 +258,7 @@ export default function Profile() {
               
               {/* Bus Notifications Toggle */}
               <Animated.View
-                entering={FadeInDown.delay(700).springify()}
+                entering={FadeIn.duration(500).delay(700)}
               >
                 <BusNotificationsToggle
                   isDark={isDark}
@@ -270,7 +268,7 @@ export default function Profile() {
 
               {/* Speed Monitoring Toggle */}
               <Animated.View
-                entering={FadeInDown.delay(750).springify()}
+                entering={FadeIn.duration(500).delay(750)}
               >
                 <SpeedMonitoringToggle
                   isDark={isDark}
@@ -282,7 +280,7 @@ export default function Profile() {
             {/* Menu Section */}
             <Animated.View 
               style={styles.sectionContainer}
-              entering={FadeInDown.delay(800).springify()}
+              entering={FadeIn.duration(500).delay(800)}
             >
               <View style={styles.sectionHeader}>
                 <Ionicons name="menu-outline" size={22} color={isDark ? '#1E90FF' : '#1E90FF'} />
@@ -297,7 +295,7 @@ export default function Profile() {
             {/* Developer Tools Section */}
             <Animated.View 
               style={styles.sectionContainer}
-              entering={FadeInDown.delay(900).springify()}
+              entering={FadeIn.duration(500).delay(900)}
             >
               <View style={styles.sectionHeader}>
                 <Ionicons name="code-outline" size={22} color={isDark ? '#1E90FF' : '#1E90FF'} />
@@ -312,7 +310,7 @@ export default function Profile() {
             {/* Footer */}
             <Animated.View 
               style={styles.footerContainer}
-              entering={FadeInDown.delay(1000).springify()}
+              entering={FadeIn.duration(500).delay(1000)}
             >
               <Text style={[styles.footer, { color: isDark ? '#aaa' : '#888' }]}>
                 Made with ❤️ by Om Shrikhande

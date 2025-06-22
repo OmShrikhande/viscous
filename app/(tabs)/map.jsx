@@ -4,26 +4,30 @@ import { onValue, ref } from 'firebase/database';
 import { collection, doc, getDocs, onSnapshot } from 'firebase/firestore';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Animated,
   Dimensions,
   SafeAreaView,
   StatusBar,
-  StyleSheet,
-  View
+  StyleSheet
 } from 'react-native';
 import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
-import { firestoreDb, realtimeDatabase } from './../../configs/FirebaseConfigs';
+import {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming
+} from 'react-native-reanimated';
 import SpeedMonitor from '../../components/tracking/SpeedMonitor';
+import { firestoreDb, realtimeDatabase } from './../../configs/FirebaseConfigs';
 
 // Import map components
-import { darkMapStyle } from '../../components/map/MapStyles';
+import BusInfoCard from '../../components/map/BusInfoCard';
+import BusMarker from '../../components/map/BusMarker';
 import LoadingScreen from '../../components/map/LoadingScreen';
 import MapControls from '../../components/map/MapControls';
-import BusMarker from '../../components/map/BusMarker';
-import StopMarkers from '../../components/map/StopMarkers';
-import BusInfoCard from '../../components/map/BusInfoCard';
-import ZoomControl from '../../components/map/ZoomControl';
+import { darkMapStyle } from '../../components/map/MapStyles';
+import NextStopsCard from '../../components/map/NextStopsCard';
 import StopInfoCard from '../../components/map/StopInfoCard';
+import StopMarkers from '../../components/map/StopMarkers';
+import ZoomControl from '../../components/map/ZoomControl';
 import { determineNearbyStops } from '../../components/map/mapUtils';
 
 const MapScreen = () => {
@@ -42,8 +46,8 @@ const MapScreen = () => {
   const [showBusInfo, setShowBusInfo] = useState(false);
   
   // Animation values
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
+  const fadeAnim = useSharedValue(0);
+  const slideAnim = useSharedValue(30);
   const mapRef = useRef(null);
   const router = useRouter();
 
@@ -51,18 +55,8 @@ const MapScreen = () => {
   useEffect(() => {
     // Use a small delay to avoid conflict with layout animations
     const animationTimeout = setTimeout(() => {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 600,
-          useNativeDriver: true,
-        })
-      ]).start();
+      fadeAnim.value = withTiming(1, { duration: 800 });
+      slideAnim.value = withTiming(0, { duration: 600 });
     }, 100);
     
     return () => clearTimeout(animationTimeout);
@@ -107,7 +101,9 @@ const MapScreen = () => {
           // If we have stops data, determine which stops are nearby
           if (stops.length > 0) {
             const nearbyStopSerial = determineNearbyStops(currentLoc, stops);
+            console.log('Nearby stop serial:', nearbyStopSerial);
             if (nearbyStopSerial !== null) {
+              console.log('Setting current stop serial to:', nearbyStopSerial);
               setCurrentStopSerial(nearbyStopSerial);
             }
             
@@ -371,20 +367,33 @@ const MapScreen = () => {
   };
 
   // Animation styles
-  const busInfoAnimStyle = {
-    opacity: fadeAnim,
-    transform: [{ translateY: slideAnim }],
-  };
+  const busInfoAnimStyle = useAnimatedStyle(() => {
+    return {
+      opacity: fadeAnim.value,
+      transform: [{ translateY: slideAnim.value }],
+    };
+  });
   
-  const zoomControlAnimStyle = {
-    opacity: fadeAnim,
-    transform: [{ translateY: Animated.multiply(slideAnim, -1) }],
-  };
+  const zoomControlAnimStyle = useAnimatedStyle(() => {
+    return {
+      opacity: fadeAnim.value,
+      transform: [{ translateY: -slideAnim.value }],
+    };
+  });
   
-  const stopInfoAnimStyle = {
-    opacity: fadeAnim,
-    transform: [{ translateY: slideAnim }],
-  };
+  const stopInfoAnimStyle = useAnimatedStyle(() => {
+    return {
+      opacity: fadeAnim.value,
+      transform: [{ translateY: slideAnim.value }],
+    };
+  });
+  
+  const nextStopsAnimStyle = useAnimatedStyle(() => {
+    return {
+      opacity: fadeAnim.value,
+      transform: [{ translateX: -slideAnim.value }],
+    };
+  });
 
   // If loading, show loading screen
   if (isLoading) {
@@ -492,6 +501,21 @@ const MapScreen = () => {
           selectedStop={selectedStop}
           onClose={closeSelectedStop}
           animStyle={stopInfoAnimStyle}
+        />
+      )}
+      
+      {/* Next Stops Card */}
+      {console.log('Rendering NextStopsCard?', { 
+        hasSelectedStop: !!selectedStop, 
+        currentStopSerial, 
+        shouldRender: !selectedStop && !!currentStopSerial 
+      })}
+      {!selectedStop && currentStopSerial && (
+        <NextStopsCard 
+          isDark={isDark}
+          stops={stops}
+          currentStopSerial={currentStopSerial}
+          animStyle={nextStopsAnimStyle}
         />
       )}
       
