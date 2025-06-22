@@ -221,7 +221,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 For questions or feedback, please reach out to:
 
 - **Email**: omshrikhande73@gmail.com
-- **LinkedIn**: [@YourTwitterHandle](https://www.linkedin.com/in/om-shrikhande-37108926a/)
+- **LinkedIn**: [@OmShrikhande](https://www.linkedin.com/in/om-shrikhande-37108926a/)
 
 ---
 
