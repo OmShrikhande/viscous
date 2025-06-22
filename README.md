@@ -37,7 +37,7 @@ Viscous is a modern, feature-rich bus tracking application built with React Nati
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/yourusername/viscous.git
+   git clone https://github.com/OmShrikhande/viscous.git
    cd viscous
    ```
 
@@ -220,8 +220,8 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 For questions or feedback, please reach out to:
 
-- **Email**: your.email@example.com
-- **Twitter**: [@YourTwitterHandle](https://twitter.com/YourTwitterHandle)
+- **Email**: omshrikhande73@gmail.com
+- **LinkedIn**: [@YourTwitterHandle](https://www.linkedin.com/in/om-shrikhande-37108926a/)
 
 ---
 
@@ -229,11 +229,11 @@ For questions or feedback, please reach out to:
   <p>Built with ❤️ using <a href="https://expo.dev">Expo</a> and <a href="https://reactnative.dev">React Native</a></p>
   
   <p>
-    <a href="https://github.com/yourusername/viscous/stargazers">
-      <img src="https://img.shields.io/github/stars/yourusername/viscous?style=social" alt="Stars" />
+    <a href="https://github.com/OmShrikhande/viscous/stargazers">
+      <img src="https://img.shields.io/github/stars/OmShrikhande/viscous?style=social" alt="Stars" />
     </a>
-    <a href="https://github.com/yourusername/viscous/network/members">
-      <img src="https://img.shields.io/github/forks/yourusername/viscous?style=social" alt="Forks" />
+    <a href="https://github.com/OmShrikhande/viscous/network/members">
+      <img src="https://img.shields.io/github/forks/OmShrikhande/viscous?style=social" alt="Forks" />
     </a>
   </p>
 </div>
