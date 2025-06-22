@@ -171,7 +171,7 @@ const BusStopTimeline = ({ isDark }) => {
     if (!userRouteNumber || routeStops.length === 0) return;
 
     console.log(`Setting up bus location listener for route ${userRouteNumber}`);
-    const locationRef = ref(realtimeDatabase, 'adddelete/Location');
+    const locationRef = ref(realtimeDatabase, 'Location');
     
     const unsubscribe = onValue(locationRef, (snapshot) => {
       const locationData = snapshot.val();

@@ -1,25 +1,25 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  FlatList, 
-  TouchableOpacity, 
-  Modal, 
-  ActivityIndicator
-} from 'react-native';
+import { useUser } from '@clerk/clerk-expo';
+import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { firestoreDb } from '../../configs/FirebaseConfigs';
-import { Colors } from '../../constants/Colors';
-import Animated, { 
-  FadeIn, 
+import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
+import { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Modal,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import Animated, {
   FadeInDown
 } from 'react-native-reanimated';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { firestoreDb } from '../../configs/FirebaseConfigs';
+import { Colors } from '../../constants/Colors';
 
 const ScheduleScreen = ({ visible, onClose, isDark }) => {
+  const { user } = useUser();
   const [scheduleData, setScheduleData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [userRouteNumber, setUserRouteNumber] = useState('');
@@ -27,17 +27,30 @@ const ScheduleScreen = ({ visible, onClose, isDark }) => {
 
   useEffect(() => {
     if (visible) {
-      loadUserData();
+      loadUserRouteData();
     }
   }, [visible]);
 
-  const loadUserData = async () => {
+  const loadUserRouteData = async () => {
+    setLoading(true);
     try {
-      const storedData = await AsyncStorage.getItem('userData');
-      if (storedData) {
-        const parsed = JSON.parse(storedData);
-        const routeNumber = parsed.routeNumber || '';
-        const stopName = parsed.stopName || '';
+      // Get current user email from Clerk
+      if (!user) {
+        console.error('No user is signed in');
+        setLoading(false);
+        return;
+      }
+
+      const userEmail = user.primaryEmailAddress.emailAddress;
+      
+      // Get user route number from /userdata/{usermail}/routeNumber
+      const userDocRef = doc(firestoreDb, 'userdata', userEmail);
+      const userDocSnap = await getDoc(userDocRef);
+      
+      if (userDocSnap.exists()) {
+        const userData = userDocSnap.data();
+        const routeNumber = userData.routeNumber || '';
+        const stopName = userData.stopName || '';
         
         setUserRouteNumber(routeNumber);
         setUserStopName(stopName);
@@ -48,10 +61,11 @@ const ScheduleScreen = ({ visible, onClose, isDark }) => {
           setLoading(false);
         }
       } else {
+        console.log('No user data found');
         setLoading(false);
       }
     } catch (error) {
-      console.error('Error loading user data:', error);
+      console.error('Error loading user route data:', error);
       setLoading(false);
     }
   };
@@ -59,31 +73,48 @@ const ScheduleScreen = ({ visible, onClose, isDark }) => {
   const fetchScheduleData = async (routeNumber) => {
     setLoading(true);
     try {
-      // Query the route collection for this specific route number
-      const routeQuery = query(
-        collection(firestoreDb, 'routes'), 
-        where('routeNumber', '==', routeNumber)
-      );
-      
-      const routeSnapshot = await getDocs(routeQuery);
+      // Get all documents from Route{routeNumber}/ collection
+      const routeCollectionRef = collection(firestoreDb, `Route${routeNumber}`);
+      const routeSnapshot = await getDocs(routeCollectionRef);
       
       if (!routeSnapshot.empty) {
-        // Get the first document that matches the route number
-        const routeDoc = routeSnapshot.docs[0];
-        const routeData = routeDoc.data();
+        console.log(`Found ${routeSnapshot.docs.length} stops for Route${routeNumber}`);
         
-        // Check if stops array exists
-        if (routeData.stops && Array.isArray(routeData.stops)) {
-          // Sort stops by their order if available
-          const sortedStops = [...routeData.stops].sort((a, b) => 
-            (a.order || 0) - (b.order || 0)
-          );
+        // Map documents to get stop name (doc ID), time field, and serialNumber
+        const stops = routeSnapshot.docs.map(doc => {
+          const data = doc.data();
+          // Ensure serialNumber is a number
+          let serialNum = 999; // Default high number
+          if (data.serialNumber !== undefined) {
+            serialNum = typeof data.serialNumber === 'string' 
+              ? parseInt(data.serialNumber, 10) 
+              : Number(data.serialNumber);
+            
+            // If parsing failed, use default
+            if (isNaN(serialNum)) serialNum = 999;
+          }
           
-          setScheduleData(sortedStops);
-        } else {
-          setScheduleData([]);
-        }
+          const stopData = {
+            name: doc.id, // Document name as stop name
+            arrivalTime: data.time || null, // Time field
+            serialNumber: serialNum
+          };
+          console.log(`Stop: ${stopData.name}, SerialNumber: ${stopData.serialNumber}`);
+          return stopData;
+        });
+        
+        console.log('Before sorting:', JSON.stringify(stops.map(s => ({ name: s.name, serialNumber: s.serialNumber }))));
+        
+        // Sort stops by serialNumber - serialNumber should already be a number at this point
+        const sortedStops = [...stops].sort((a, b) => {
+          return a.serialNumber - b.serialNumber;
+        });
+        
+        console.log('After sorting:', JSON.stringify(sortedStops.map(s => ({ name: s.name, serialNumber: s.serialNumber }))));
+        
+        setScheduleData(sortedStops);
       } else {
+        console.log(`No stops found for Route${routeNumber}`);
         setScheduleData([]);
       }
     } catch (error) {
@@ -119,7 +150,9 @@ const ScheduleScreen = ({ visible, onClose, isDark }) => {
     return stopName === userStopName;
   };
 
-  const renderStopItem = ({ item, index }) => (
+  const renderStopItem = ({ item, index }) => {
+    console.log(`Rendering stop ${index}: ${item.name}, serialNumber: ${item.serialNumber}`);
+    return (
     <Animated.View
       entering={FadeInDown.delay(index * 100).springify()}
       style={styles.animatedContainer}
@@ -142,7 +175,7 @@ const ScheduleScreen = ({ visible, onClose, isDark }) => {
               isDark ? styles.textDark : styles.textLight,
               isUserStop(item.name) && styles.userStopText
             ]}>
-              {index + 1}
+              {typeof item.serialNumber === 'number' ? item.serialNumber : index + 1}
             </Text>
           </View>
           {index < scheduleData.length - 1 && (
@@ -182,27 +215,11 @@ const ScheduleScreen = ({ visible, onClose, isDark }) => {
               {formatTime(item.arrivalTime)}
             </Text>
           </View>
-          
-          {item.landmark && (
-            <View style={styles.landmarkContainer}>
-              <MaterialIcons 
-                name="location-on" 
-                size={16} 
-                color={isDark ? '#aaa' : '#555'} 
-                style={styles.landmarkIcon}
-              />
-              <Text style={[
-                styles.landmark,
-                isDark ? styles.textDarkSecondary : styles.textLightSecondary
-              ]}>
-                {item.landmark}
-              </Text>
-            </View>
-          )}
         </View>
       </View>
     </Animated.View>
   );
+  };
 
   return (
     <Modal
@@ -272,7 +289,7 @@ const ScheduleScreen = ({ visible, onClose, isDark }) => {
                 styles.emptyText,
                 isDark ? styles.textDark : styles.textLight
               ]}>
-                No schedule found for Route {userRouteNumber}
+                No schedule found for Route {userRouteNumber}. Check if Route{userRouteNumber} collection exists.
               </Text>
             </View>
           ) : (
@@ -288,7 +305,7 @@ const ScheduleScreen = ({ visible, onClose, isDark }) => {
                   styles.routeDescription,
                   isDark ? styles.textDarkSecondary : styles.textLightSecondary
                 ]}>
-                  {scheduleData.length} stops • {scheduleData[0]?.name} to {scheduleData[scheduleData.length - 1]?.name}
+                  {scheduleData.length} stops
                 </Text>
               </View>
               

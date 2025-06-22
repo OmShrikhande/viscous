@@ -52,7 +52,7 @@ TaskManager.defineTask(BACKGROUND_BUS_LOCATION_TASK, async () => {
     }
     
     // Get current bus location
-    const locationRef = ref(realtimeDatabase, 'adddelete/Location');
+    const locationRef = ref(realtimeDatabase, 'Location');
     
     return new Promise((resolve) => {
       // Use get() instead of onValue to prevent memory leaks
@@ -289,7 +289,7 @@ export const registerBackgroundTasks = async () => {
           }
           
           // Get current bus location
-          const locationRef = ref(realtimeDatabase, 'adddelete/Location');
+          const locationRef = ref(realtimeDatabase, 'Location');
           
           try {
             // Use get() instead of onValue to avoid memory leaks

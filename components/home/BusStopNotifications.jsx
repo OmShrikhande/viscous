@@ -103,7 +103,7 @@ const BusStopNotifications = ({ isDark }) => {
     if (!userRouteNumber || !notificationsEnabled) return;
 
     console.log(`Setting up bus location listener for route ${userRouteNumber}`);
-    const locationRef = ref(realtimeDatabase, 'adddelete/Location');
+    const locationRef = ref(realtimeDatabase, 'Location');
     
     const unsubscribe = onValue(locationRef, (snapshot) => {
       const locationData = snapshot.val();

@@ -1,6 +1,5 @@
-import React from 'react';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Colors } from '../../constants/Colors';
 
 /**
@@ -66,7 +65,7 @@ const MapControls = ({
 const styles = StyleSheet.create({
   controlsContainer: {
     position: 'absolute',
-    right: 16,
+    left: 16,  // Changed from right to left
     top: 100,
     zIndex: 5,
   },
