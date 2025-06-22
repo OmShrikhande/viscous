@@ -4,11 +4,11 @@ import { useRouter } from 'expo-router'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { useEffect, useRef, useState } from 'react'
 import { Animated, RefreshControl, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import BusCapacityIndicator from '../../components/home/BusCapacityIndicator'
 import BusStopNotifications from '../../components/home/BusStopNotifications'
 import BusStopTimeline from '../../components/home/BusStopTimeline'
-import BusCapacityIndicator from '../../components/home/BusCapacityIndicator'
-import TrackingManager from '../../components/tracking/TrackingManager'
 import Header from '../../components/home/Header'
+import TrackingManager from '../../components/tracking/TrackingManager'
 import UserDataManager from '../../components/usefulComponent/UserDataManager'
 import { firestoreDb } from '../../configs/FirebaseConfigs'
 import { Colors } from '../../constants/Colors'
@@ -127,7 +127,7 @@ export default function  Home() {
               { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
             ]}
           >
-            {/* <BusStopNotifications isDark={isDark} /> */}
+            <BusStopNotifications isDark={isDark} />
             <TrackingManager isDark={isDark} />
             <BusStopTimeline isDark={isDark} />
             <BusCapacityIndicator isDark={isDark} routeNumber={userRouteNumber} />

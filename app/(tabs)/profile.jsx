@@ -1,24 +1,26 @@
+import { useUser } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Dimensions,
-  Platform,
-  SafeAreaView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    Platform,
+    SafeAreaView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import Animated, {
-  FadeIn,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming
+    FadeIn,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
+    withTiming
 } from 'react-native-reanimated';
 
 import BusNotificationsToggle from '../../components/Profile/BusNotificationsToggle';
@@ -29,6 +31,7 @@ import TestNotifications from '../../components/usefulComponent/TestNotification
 import ThemeToggleSwitch from '../../components/usefulComponent/ThemeToggleSwitch';
 
 export default function Profile() {
+  const { user, isLoaded: isUserLoaded } = useUser();
   const [userEmail, setUserEmail] = useState(null);
   const [userName, setUserName] = useState('');
   const [userImage, setUserImage] = useState('');
@@ -48,28 +51,61 @@ export default function Profile() {
   // Load user data from AsyncStorage
   const loadUserData = useCallback(async () => {
     try {
+      // Check if Clerk user is loaded
+      if (!isUserLoaded) {
+        console.log('Waiting for Clerk user to load...');
+        return; // Wait for user to load
+      }
+      
+      // Get email from Clerk if available
+      const clerkEmail = user?.emailAddresses?.[0]?.emailAddress;
+      console.log('🔍 Clerk user email:', clerkEmail);
+      
+      // Load data from AsyncStorage
       const storedData = await AsyncStorage.getItem('userData');
       console.log('🔍 Loading user data from AsyncStorage');
+      
       if (storedData) {
         const parsed = JSON.parse(storedData);
-        setUserEmail(parsed.email);
-        setUserName(parsed.name || 'No Name');
-        setUserImage(parsed.image || null);
+        
+        // Use Clerk email if available, otherwise use stored email
+        setUserEmail(clerkEmail || parsed.email);
+        
+        // Use Clerk name if available, otherwise use stored name
+        const clerkName = user?.fullName || user?.firstName;
+        setUserName(clerkName || parsed.name || 'No Name');
+        
+        // Use Clerk image if available, otherwise use stored image
+        setUserImage(user?.imageUrl || parsed.image || null);
+        
+        // Set other user data
         setPhoneNumber(parsed.phoneNumber || '');
         setRouteNumber(parsed.routeNumber || '');
         setBusStop(parsed.busStop || '');
         setLastUpdated(parsed.lastUpdated ? new Date(parsed.lastUpdated) : null);
         setIsDark(parsed.isDark);
+        
+        console.log('✅ User data loaded successfully');
+      } else if (clerkEmail) {
+        // If no stored data but Clerk user is available, set basic data from Clerk
+        setUserEmail(clerkEmail);
+        setUserName(user?.fullName || user?.firstName || 'No Name');
+        setUserImage(user?.imageUrl || null);
+        console.log('✅ Basic user data set from Clerk');
       }
     } catch (err) {
       console.error('❌ Failed to load user data:', err);
+      Alert.alert('Error', 'Failed to load your profile data. Please try again.');
     }
+    
     setIsLoading(false);
-  }, []);
+  }, [user, isUserLoaded]);
 
   useEffect(() => {
-    loadUserData();
-  }, [loadUserData]);
+    if (isUserLoaded) {
+      loadUserData();
+    }
+  }, [loadUserData, isUserLoaded]);
   
   // Separate useEffect for animations to avoid dependency warnings
   useEffect(() => {
@@ -102,11 +138,21 @@ export default function Profile() {
   });
 
   const handleProfileUpdate = (updatedData) => {
+    console.log('Profile update received:', updatedData);
+    
+    // Update state with new data
     setUserName(updatedData.name || '');
     setPhoneNumber(updatedData.phoneNumber || '');
     setRouteNumber(updatedData.routeNumber || '');
     setBusStop(updatedData.busStop || '');
     setLastUpdated(updatedData.lastUpdated ? new Date(updatedData.lastUpdated) : null);
+    
+    // Show success message
+    Alert.alert(
+      'Profile Updated',
+      `Your profile has been updated successfully. Your bus stop is now set to ${updatedData.busStop}.`,
+      [{ text: 'OK' }]
+    );
   };
 
   const themeStyles = isDark ? styles.dark : styles.light;

@@ -4,17 +4,17 @@ import { BlurView } from 'expo-blur';
 import { collection, doc, getDocs, serverTimestamp, setDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { firestoreDb as db } from '../../configs/FirebaseConfigs';
@@ -46,15 +46,24 @@ const EditProfileForm = ({ visible, onClose, userData, isDark, onUpdate }) => {
       if (!routeNumber || routeNumber.trim() === '') return;
       
       setIsLoadingStops(true);
+      console.log(`Fetching bus stops for route ${routeNumber}...`);
+      
       try {
-        const routeRef = collection(db, `Route${routeNumber}`);
+        const routeCollectionName = `Route${routeNumber}`;
+        console.log(`Looking for collection: ${routeCollectionName}`);
+        
+        const routeRef = collection(db, routeCollectionName);
         const stopsSnapshot = await getDocs(routeRef);
         
+        console.log(`Found ${stopsSnapshot.size} stops for route ${routeNumber}`);
+        
         if (stopsSnapshot.empty) {
+          console.warn(`No stops found for route ${routeNumber}`);
           Alert.alert('No stops found', `No bus stops found for route ${routeNumber}`);
           setAvailableStops([]);
         } else {
           const stops = stopsSnapshot.docs.map(doc => doc.id);
+          console.log('Available stops:', stops);
           setAvailableStops(stops);
         }
       } catch (error) {
@@ -70,6 +79,8 @@ const EditProfileForm = ({ visible, onClose, userData, isDark, onUpdate }) => {
   }, [routeNumber]);
 
   const handleSubmit = async () => {
+    console.log('Submitting profile update...');
+    
     // Validate inputs
     if (!fullName.trim()) {
       Alert.alert('Missing Information', 'Please enter your full name');
@@ -92,15 +103,24 @@ const EditProfileForm = ({ visible, onClose, userData, isDark, onUpdate }) => {
     }
 
     setIsSubmitting(true);
+    console.log('Starting profile update with data:', {
+      name: fullName,
+      phoneNumber,
+      routeNumber,
+      busStop
+    });
     
     try {
-      const email = user.emailAddresses?.[0]?.emailAddress;
+      // Get user email from Clerk
+      const email = user?.emailAddresses?.[0]?.emailAddress;
+      console.log('User email from Clerk:', email);
+      
       if (!email) {
+        console.error('User email not found in Clerk user object');
         throw new Error('User email not found');
       }
       
-      // Save to Firestore
-      const userRef = doc(db, 'userdata', email);
+      // Prepare user data
       const userData = {
         name: fullName,
         email,
@@ -111,7 +131,12 @@ const EditProfileForm = ({ visible, onClose, userData, isDark, onUpdate }) => {
         lastUpdated: serverTimestamp(),
       };
       
+      console.log('Saving to Firestore:', userData);
+      
+      // Save to Firestore
+      const userRef = doc(db, 'userdata', email);
       await setDoc(userRef, userData, { merge: true });
+      console.log('✅ Firestore update successful');
       
       // Save to AsyncStorage
       const storedData = await AsyncStorage.getItem('userData');
@@ -124,20 +149,32 @@ const EditProfileForm = ({ visible, onClose, userData, isDark, onUpdate }) => {
       };
       
       await AsyncStorage.setItem('userData', JSON.stringify(localUserData));
-      console.log('✅ User profile data updated:', localUserData);
+      console.log('✅ AsyncStorage update successful');
       
       // Notify parent component
       if (onUpdate) {
+        console.log('Notifying parent component with updated data');
         onUpdate(localUserData);
       }
       
       // Close modal
+      console.log('Closing modal');
       onClose();
       
       Alert.alert('Success', 'Your profile has been updated successfully.');
     } catch (error) {
       console.error('❌ Failed to update profile data:', error);
-      Alert.alert('Error', 'Failed to update your profile. Please try again.');
+      
+      // More detailed error message
+      let errorMessage = 'Failed to update your profile. Please try again.';
+      
+      if (error.code === 'permission-denied') {
+        errorMessage = 'You do not have permission to update this profile.';
+      } else if (error.message.includes('network')) {
+        errorMessage = 'Network error. Please check your internet connection and try again.';
+      }
+      
+      Alert.alert('Error', errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -239,10 +276,16 @@ const EditProfileForm = ({ visible, onClose, userData, isDark, onUpdate }) => {
                   <Text style={[styles.label, { color: textColor }]}>Your Bus Stop</Text>
                   <TouchableOpacity
                     onPress={() => {
-                      if (routeNumber && availableStops.length > 0) {
-                        setShowStopsList(!showStopsList);
-                      } else if (routeNumber) {
-                        Alert.alert('Loading', 'Bus stops are being loaded...');
+                      if (routeNumber) {
+                        if (isLoadingStops) {
+                          Alert.alert('Loading', 'Bus stops are being loaded...');
+                        } else if (availableStops.length > 0) {
+                          setShowStopsList(!showStopsList);
+                          console.log('Toggling stops list:', !showStopsList);
+                        } else {
+                          console.log('No stops available for route', routeNumber);
+                          Alert.alert('No Stops Available', `No bus stops found for route ${routeNumber}. Please try another route.`);
+                        }
                       } else {
                         Alert.alert('Route Required', 'Please select a route number first');
                       }
@@ -259,24 +302,35 @@ const EditProfileForm = ({ visible, onClose, userData, isDark, onUpdate }) => {
                     <View style={styles.loadingContainer}>
                       <ActivityIndicator size="small" color={buttonBgColor} />
                       <Text style={[styles.loadingText, { color: textColor }]}>
-                        Loading stops...
+                        Loading stops for Route {routeNumber}...
                       </Text>
                     </View>
                   )}
                   
                   {showStopsList && availableStops.length > 0 && (
                     <View style={[styles.stopsList, { backgroundColor: inputBgColor }]}>
+                      <Text style={[styles.stopsListHeader, { color: textColor }]}>
+                        Select a bus stop ({availableStops.length} available)
+                      </Text>
                       <ScrollView style={{ maxHeight: 150 }} nestedScrollEnabled={true}>
                         {availableStops.map((stop) => (
                           <TouchableOpacity
                             key={stop}
-                            style={styles.stopItem}
+                            style={[
+                              styles.stopItem,
+                              busStop === stop && { backgroundColor: isDark ? 'rgba(30, 144, 255, 0.2)' : 'rgba(30, 144, 255, 0.1)' }
+                            ]}
                             onPress={() => {
+                              console.log('Selected bus stop:', stop);
                               setBusStop(stop);
                               setShowStopsList(false);
                             }}
                           >
-                            <Text style={[styles.stopText, { color: textColor }]}>
+                            <Text style={[
+                              styles.stopText, 
+                              { color: textColor },
+                              busStop === stop && { fontFamily: 'flux-bold', color: isDark ? '#1E90FF' : '#1E90FF' }
+                            ]}>
                               {stop}
                             </Text>
                           </TouchableOpacity>
@@ -414,6 +468,14 @@ const styles = StyleSheet.create({
   stopText: {
     fontSize: 16,
     fontFamily: 'flux',
+  },
+  stopsListHeader: {
+    fontSize: 14,
+    fontFamily: 'flux-medium',
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(150, 150, 150, 0.2)',
+    textAlign: 'center',
   },
 });
 

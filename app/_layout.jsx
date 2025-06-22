@@ -37,12 +37,34 @@ export default function RootLayout() {
   const responseListener = useRef();
 
   useEffect(() => {
-    // Initialize notifications system
-    initializeNotifications();
+    // Initialize notifications system with a test notification
+    const setupNotifications = async () => {
+      try {
+        console.log('Setting up notifications in _layout.jsx...');
+        await initializeNotifications(true); // Send a test notification
+        console.log('✅ Notifications initialized successfully');
+      } catch (error) {
+        console.error('Error initializing notifications:', error);
+      }
+    };
+    
+    setupNotifications();
     
     // Set up notification listeners when app is in foreground
     notificationListener.current = addNotificationReceivedListener(notification => {
       console.log('Notification received in foreground:', notification);
+      
+      // Show an alert for the notification as a backup
+      const title = notification.request.content.title;
+      const body = notification.request.content.body;
+      
+      // Use setTimeout to avoid alert showing immediately on startup
+      setTimeout(() => {
+        if (title && body) {
+          console.log('Showing alert for notification:', title, body);
+          alert(`${title}\n${body}`);
+        }
+      }, 1000);
     });
 
     // Handle notification when user taps on it
