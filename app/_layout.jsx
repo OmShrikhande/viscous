@@ -12,6 +12,9 @@ import {
   initializeNotifications,
   removeAllNotificationListeners
 } from "../utils/notificationHelper.js";
+import { initListenerManager } from "../utils/firebaseListenerManager.js";
+import { registerBusNotificationTask } from "../utils/backgroundNotificationTask.js";
+import { initConnectionMonitoring } from "../utils/firebaseConnectionCheck.js";
 
 const tokenCache = {
   async getToken(key) {
@@ -42,13 +45,39 @@ export default function RootLayout() {
       try {
         console.log('Setting up notifications in _layout.jsx...');
         await initializeNotifications(true); // Send a test notification
-        console.log('✅ Notifications initialized successfully');
+        
+        // Register background notification task
+        console.log('Setting up background notification task...');
+        await registerBusNotificationTask();
+        
+        console.log('✅ Notifications and background tasks initialized successfully');
       } catch (error) {
         console.error('Error initializing notifications:', error);
       }
     };
     
+    // Initialize Firebase listener manager
+    const setupListenerManager = async () => {
+      try {
+        console.log('Initializing Firebase listener manager...');
+        const cleanupListenerManager = await initListenerManager();
+        console.log('✅ Firebase listener manager initialized successfully');
+        
+        // Initialize connection monitoring
+        console.log('Initializing Firebase connection monitoring...');
+        initConnectionMonitoring();
+        console.log('✅ Firebase connection monitoring initialized');
+        
+        return cleanupListenerManager;
+      } catch (error) {
+        console.error('Error initializing Firebase listener manager:', error);
+        return null;
+      }
+    };
+    
+    // Set up both systems
     setupNotifications();
+    const listenerManagerCleanupPromise = setupListenerManager();
     
     // Set up notification listeners when app is in foreground
     notificationListener.current = addNotificationReceivedListener(notification => {
@@ -93,6 +122,14 @@ export default function RootLayout() {
       ].filter(Boolean); // Filter out any undefined listeners
       
       removeAllNotificationListeners(listenersToRemove);
+      
+      // Clean up Firebase listener manager
+      listenerManagerCleanupPromise.then(cleanup => {
+        if (typeof cleanup === 'function') {
+          console.log('Cleaning up Firebase listener manager...');
+          cleanup();
+        }
+      });
     };
   }, []);
 

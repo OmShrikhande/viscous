@@ -4,15 +4,18 @@ import { onValue, ref } from 'firebase/database';
 import { collection, getDocs, onSnapshot } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Dimensions,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View
+    ActivityIndicator,
+    Dimensions,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { firestoreDb, realtimeDatabase } from '../../configs/FirebaseConfigs';
+import { registerListener } from '../../utils/firebaseListenerManager';
+import { checkFirestoreConnection, handleFirestoreError } from '../../utils/firebaseConnectionCheck';
 
 const BusStopTimeline = ({ isDark }) => {
   const [userRouteNumber, setUserRouteNumber] = useState('');
@@ -24,6 +27,7 @@ const BusStopTimeline = ({ isDark }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [stopListeners, setStopListeners] = useState([]);
+  const [connectionStatus, setConnectionStatus] = useState(true);
 
   // Load user data
   useEffect(() => {
@@ -47,6 +51,22 @@ const BusStopTimeline = ({ isDark }) => {
     loadUserData();
   }, []);
 
+  // Check connection status periodically
+  useEffect(() => {
+    const checkConnection = async () => {
+      const isConnected = await checkFirestoreConnection();
+      setConnectionStatus(isConnected);
+    };
+    
+    // Check immediately
+    checkConnection();
+    
+    // Then check every 30 seconds
+    const intervalId = setInterval(checkConnection, 30000);
+    
+    return () => clearInterval(intervalId);
+  }, []);
+
   // Load route stops when route number changes and set up listeners for reached status
   useEffect(() => {
     const loadRouteStops = async () => {
@@ -54,6 +74,17 @@ const BusStopTimeline = ({ isDark }) => {
 
       try {
         setIsLoading(true);
+        
+        // Check connection first
+        const isConnected = await checkFirestoreConnection();
+        setConnectionStatus(isConnected);
+        
+        if (!isConnected) {
+          setError('Firebase connection issue. Please check your internet connection and try again.');
+          setIsLoading(false);
+          return;
+        }
+        
         const routeRef = collection(firestoreDb, `Route${userRouteNumber}`);
         const stopsSnapshot = await getDocs(routeRef);
         
@@ -91,47 +122,94 @@ const BusStopTimeline = ({ isDark }) => {
           
           // Create a single listener for the entire route collection
           const routeRef = collection(firestoreDb, `Route${userRouteNumber}`);
-          const unsubscribe = onSnapshot(routeRef, (snapshot) => {
-            // Process all changes in a batch for better performance
-            const updatedStops = {};
-            let highestReachedIndex = -1;
-            
-            snapshot.docs.forEach(doc => {
-              const stopData = doc.data();
-              const stopName = doc.id;
+          const routeListener = onSnapshot(routeRef, (snapshot) => {
+            try {
+              console.log(`Received snapshot for Route${userRouteNumber} with ${snapshot.docs.length} documents`);
               
-              if (stopData.reached !== undefined) {
-                updatedStops[stopName] = {
-                  reached: stopData.reached,
-                  time: stopData.reachedTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                };
-                
-                // If this stop is reached, track its index
-                if (stopData.reached) {
-                  const stopIndex = sortedStops.findIndex(s => s.name === stopName);
-                  if (stopIndex > highestReachedIndex) {
-                    highestReachedIndex = stopIndex;
+              // Process all changes in a batch for better performance
+              const updatedStops = {};
+              let highestReachedIndex = -1;
+              
+              // Log all stops with reached status for debugging
+              const reachedStopsDebug = [];
+              
+              snapshot.docs.forEach(doc => {
+                try {
+                  const stopData = doc.data();
+                  const stopName = doc.id;
+                  
+                  // Log each stop's reached status for debugging
+                  console.log(`Stop ${stopName} data:`, JSON.stringify({
+                    reached: stopData.reached,
+                    reachedTime: stopData.reachedTime,
+                    serialNumber: stopData.serialNumber || stopData.order || 0
+                  }));
+                  
+                  if (stopData.reached === true) {
+                    reachedStopsDebug.push(stopName);
                   }
+                  
+                  if (stopData.reached !== undefined) {
+                    updatedStops[stopName] = {
+                      reached: stopData.reached === true, // Ensure it's a boolean true
+                      time: stopData.reachedTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    };
+                    
+                    // If this stop is reached, track its index
+                    if (stopData.reached === true) {
+                      const stopIndex = sortedStops.findIndex(s => s.name === stopName);
+                      if (stopIndex > highestReachedIndex) {
+                        highestReachedIndex = stopIndex;
+                      }
+                    }
+                  }
+                } catch (docError) {
+                  console.error(`Error processing stop document:`, docError);
+                }
+              });
+              
+              // Log reached stops for debugging
+              if (reachedStopsDebug.length > 0) {
+                console.log(`Reached stops in this snapshot: ${reachedStopsDebug.join(', ')}`);
+              } else {
+                console.log('No reached stops found in this snapshot');
+              }
+              
+              // Update all reached stops at once for better performance
+              if (Object.keys(updatedStops).length > 0) {
+                console.log(`Updating ${Object.keys(updatedStops).length} stops from Firestore`);
+                setReachedStops(updatedStops);
+                
+                // Update current stop index if needed
+                if (highestReachedIndex > currentStopIndex) {
+                  console.log(`Updating current stop index to ${highestReachedIndex}`);
+                  setCurrentStopIndex(highestReachedIndex);
                 }
               }
-            });
-            
-            // Update all reached stops at once for better performance
-            if (Object.keys(updatedStops).length > 0) {
-              console.log(`Updating ${Object.keys(updatedStops).length} stops from Firestore`);
-              setReachedStops(updatedStops);
-              
-              // Update current stop index if needed
-              if (highestReachedIndex > currentStopIndex) {
-                console.log(`Updating current stop index to ${highestReachedIndex}`);
-                setCurrentStopIndex(highestReachedIndex);
-              }
+            } catch (snapshotError) {
+              console.error(`Error processing snapshot for route ${userRouteNumber}:`, snapshotError);
             }
-          }, error => {
+          }, async error => {
             console.error(`Error listening to route ${userRouteNumber}:`, error);
+            // Try to provide more details about the error
+            console.error(`Error details: ${error.code} - ${error.message}`);
+            
+            // Check if it's a connection error
+            const isConnectionError = await handleFirestoreError(error);
+            if (isConnectionError) {
+              setConnectionStatus(false);
+              setError('Firebase connection issue. Please check your internet connection.');
+            }
           });
           
-          listeners.push(unsubscribe);
+          // Register with our listener manager - use background type for better reliability
+          const unregisterRouteListener = registerListener(
+            `timeline-route-${userRouteNumber}`,
+            routeListener,
+            'background' // Use background type to ensure it keeps working even when not directly visible
+          );
+          
+          listeners.push(unregisterRouteListener);
           
           setStopListeners(listeners);
           setError(null);
@@ -173,7 +251,7 @@ const BusStopTimeline = ({ isDark }) => {
     console.log(`Setting up bus location listener for route ${userRouteNumber}`);
     const locationRef = ref(realtimeDatabase, 'Location');
     
-    const unsubscribe = onValue(locationRef, (snapshot) => {
+    const locationListener = onValue(locationRef, (snapshot) => {
       const locationData = snapshot.val();
       if (locationData) {
         // Update bus location state
@@ -191,11 +269,18 @@ const BusStopTimeline = ({ isDark }) => {
       console.error('Error in bus location listener:', error);
       setError('Failed to get bus location updates');
     });
+    
+    // Register with our listener manager
+    const unregisterLocationListener = registerListener(
+      `timeline-location-${userRouteNumber}`,
+      locationListener,
+      'foreground' // Only needed when timeline is visible
+    );
 
     // Cleanup function
     return () => {
       console.log('Cleaning up bus location listener');
-      unsubscribe();
+      unregisterLocationListener();
     };
   }, [userRouteNumber, routeStops]);
 
@@ -245,6 +330,26 @@ const BusStopTimeline = ({ isDark }) => {
           <Text style={[styles.helpText, { color: textColor }]}>
             Please set your route number in your profile.
           </Text>
+        )}
+        {!connectionStatus && (
+          <TouchableOpacity 
+            style={styles.retryButton}
+            onPress={async () => {
+              setIsLoading(true);
+              setError(null);
+              const isConnected = await checkFirestoreConnection();
+              setConnectionStatus(isConnected);
+              if (isConnected) {
+                // Force re-render to reload data
+                setUserRouteNumber(prev => prev);
+              } else {
+                setError('Still having connection issues. Please check your internet connection.');
+              }
+              setIsLoading(false);
+            }}
+          >
+            <Text style={styles.retryButtonText}>Retry Connection</Text>
+          </TouchableOpacity>
         )}
       </View>
     );
@@ -443,6 +548,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderRadius: 12,
+  },
+  retryButton: {
+    marginTop: 20,
+    backgroundColor: '#1E90FF',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: 'white',
+    fontFamily: 'flux-medium',
+    fontSize: 16,
   },
   userStopText: {
     fontWeight: 'bold',

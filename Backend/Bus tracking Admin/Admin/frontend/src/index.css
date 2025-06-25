@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+  background: transparent !important;
+}
+
+/* Leaflet Map Styles */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+}
+
+.bus-icon {
+  color: #3b82f6;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: white;
+  border-radius: 50%;
+  border: 2px solid #1e40af;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+}
+
+.start-marker-container, .end-marker-container {
+  background: none;
+  border: none;
+}
+
+.start-marker, .end-marker {
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-weight: bold;
+  font-size: 12px;
+  white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.start-marker {
+  background-color: #10b981;
+  color: white;
+}
+
+.end-marker {
+  background-color: #ef4444;
+  color: white;
+}
+
+.time-label-container {
+  background: none;
+  border: none;
+}
+
+.time-label {
+  padding: 2px 6px;
+  background-color: rgba(59, 130, 246, 0.8);
+  color: white;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: bold;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.bus-popup {
+  padding: 8px;
+}
+
+.bus-popup-title {
+  font-weight: bold;
+  margin-bottom: 5px;
+  color: #1e40af;
+}
+
+.bus-popup-info {
+  font-size: 12px;
+}
+
+.waypoint-popup {
+  padding: 5px;
+  min-width: 150px;
+}
+
+.waypoint-time {
+  font-weight: bold;
+  color: #1e40af;
+  margin-bottom: 3px;
+}
+
+.waypoint-speed {
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.waypoint-coords {
+  font-size: 10px;
+  color: #6b7280;
+}

@@ -1,0 +1,9 @@
+.node_modules/
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+# Logs
+logs
+node_modules/

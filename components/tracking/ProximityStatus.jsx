@@ -6,6 +6,7 @@ import { onValue, ref } from 'firebase/database';
 import { firestoreDb, realtimeDatabase } from '../../configs/FirebaseConfigs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
+import { registerListener, useListenerStatus } from '../../utils/firebaseListenerManager';
 
 const ProximityStatus = ({ isDark }) => {
   const [isOnboard, setIsOnboard] = useState(false);
@@ -48,7 +49,7 @@ const ProximityStatus = ({ isDark }) => {
     if (!userEmail) return;
     
     const userDocRef = doc(firestoreDb, 'userdata', userEmail);
-    const unsubscribe = onSnapshot(userDocRef, (docSnapshot) => {
+    const onboardingListener = onSnapshot(userDocRef, (docSnapshot) => {
       if (docSnapshot.exists()) {
         const data = docSnapshot.data();
         const newOnboardStatus = data.onboarding === true;
@@ -79,7 +80,14 @@ const ProximityStatus = ({ isDark }) => {
       }
     });
     
-    return () => unsubscribe();
+    // Register with our listener manager
+    const unregisterOnboardingListener = registerListener(
+      `proximity-onboarding-${userEmail}`,
+      onboardingListener,
+      'foreground' // Only needed when component is visible
+    );
+    
+    return () => unregisterOnboardingListener();
   }, [userEmail]);
   
   // Calculate distance between user and bus
@@ -97,7 +105,7 @@ const ProximityStatus = ({ isDark }) => {
         
         // Get bus location from Realtime Database
         const busLocationRef = ref(realtimeDatabase, 'bus/Location');
-        const busLocationListener = onValue(busLocationRef, (snapshot) => {
+        const busLocationListenerFn = onValue(busLocationRef, (snapshot) => {
           const busData = snapshot.val();
           
           if (busData && busData.Latitude && busData.Longitude) {
@@ -118,11 +126,25 @@ const ProximityStatus = ({ isDark }) => {
           }
         });
         
-        return () => busLocationListener();
+        // Register bus location listener
+        const unregisterBusLocationListener = registerListener(
+          `proximity-bus-location-${userEmail}`,
+          busLocationListenerFn,
+          'foreground' // Only needed when component is visible
+        );
+        
+        return () => unregisterBusLocationListener();
       }
     });
     
-    return () => userLocationListener();
+    // Register user location listener
+    const unregisterUserLocationListener = registerListener(
+      `proximity-user-location-${userEmail}`,
+      userLocationListener,
+      'foreground' // Only needed when component is visible
+    );
+    
+    return () => unregisterUserLocationListener();
   }, [userEmail, routeNumber]);
   
   // Haversine formula to calculate distance between two coordinates in meters

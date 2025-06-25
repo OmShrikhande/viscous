@@ -1,0 +1,19 @@
+{
+  "name": "bus-tracking-combined-server",
+  "version": "1.0.0",
+  "description": "Combined server for Bus Tracking System with ESP8266, Tracking, and Admin backends",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "install-all": "node install-all.js"
+  },
+  "dependencies": {
+    "child_process": "^1.0.2",
+    "path": "^0.12.7",
+    "fs": "0.0.1-security"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

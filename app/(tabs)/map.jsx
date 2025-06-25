@@ -9,6 +9,7 @@ import {
   StatusBar,
   StyleSheet
 } from 'react-native';
+import { registerListener, useListenerStatus } from '../../utils/firebaseListenerManager';
 import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 import {
   useAnimatedStyle,
@@ -79,7 +80,7 @@ const MapScreen = () => {
     console.log('Setting up real-time location listener');
     const locationRef = ref(realtimeDatabase, '/bus/Location/');
     
-    const unsub = onValue(locationRef, (snapshot) => {
+    const locationListener = onValue(locationRef, (snapshot) => {
       const data = snapshot.val();
       if (data?.Latitude && data?.Longitude) {
         try {
@@ -131,7 +132,14 @@ const MapScreen = () => {
       console.error('Error fetching location from Realtime Database:', error);
     });
     
-    return () => unsub();
+    // Register with our listener manager - this is a foreground-only listener
+    const unregisterLocationListener = registerListener(
+      'map-location-listener',
+      locationListener,
+      'foreground' // Only needed when map is visible
+    );
+    
+    return () => unregisterLocationListener();
   }, [stops, isLoading, zoom, mapReady]);
 
   // Load user data from AsyncStorage
@@ -164,7 +172,7 @@ const MapScreen = () => {
         const userDocRef = doc(firestoreDb, 'userdata', email);
         console.log('Setting up listener for user data at:', `userdata/${email}`);
         
-        const unsub = onSnapshot(userDocRef, (docSnap) => {
+        const userDataListener = onSnapshot(userDocRef, (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
             setIsDark(data.isDark === true);
@@ -186,8 +194,15 @@ const MapScreen = () => {
         }, (error) => {
           console.error('Error fetching user data from Firestore:', error);
         });
+        
+        // Register with our listener manager
+        const unregisterUserDataListener = registerListener(
+          `map-user-data-${email}`,
+          userDataListener,
+          'foreground' // Only needed when map is visible
+        );
 
-        return () => unsub();
+        return () => unregisterUserDataListener();
       } catch (err) {
         console.error('Failed to fetch user data:', err);
       }
@@ -252,7 +267,7 @@ const MapScreen = () => {
     const routeRef = collection(firestoreDb, routeCollectionName);
     
     // Use onSnapshot for real-time updates instead of getDocs
-    const unsubscribe = onSnapshot(
+    const stopsListener = onSnapshot(
       routeRef,
       (snapshot) => {
         if (snapshot.empty) {
@@ -311,8 +326,15 @@ const MapScreen = () => {
         setIsLoading(false);
       }
     );
+    
+    // Register with our listener manager
+    const unregisterStopsListener = registerListener(
+      `map-stops-${userRouteNumber}`,
+      stopsListener,
+      'foreground' // Only needed when map is visible
+    );
 
-    return () => unsubscribe();
+    return () => unregisterStopsListener();
   }, [userRouteNumber]);
 
   // Handle marker press

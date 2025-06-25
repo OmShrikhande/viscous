@@ -1,0 +1,87 @@
+.userdata-container {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+  padding: 2rem;
+  margin-top: 1rem;
+  transition: box-shadow 0.2s;
+}
+
+.userdata-container:hover {
+  box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+}
+
+.userdata-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: #22223b;
+}
+
+.userdata-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+}
+
+.userdata-table th,
+.userdata-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+  transition: background 0.2s;
+}
+
+.userdata-table th {
+  background: #f3f4f6;
+  color: #374151;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.userdata-table tr:hover td {
+  background: #f1f5f9;
+}
+
+.userdata-status-active {
+  background: #bbf7d0;
+  color: #166534;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.userdata-status-inactive {
+  background: #fecaca;
+  color: #991b1b;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.userdata-action-btn {
+  background: none;
+  border: none;
+  color: #2563eb;
+  font-weight: 500;
+  cursor: pointer;
+  margin-right: 0.5rem;
+  transition: color 0.2s;
+}
+
+.userdata-action-btn:hover {
+  color: #1d4ed8;
+}
+
+.userdata-action-btn.delete {
+  color: #dc2626;
+}
+
+.userdata-action-btn.delete:hover {
+  color: #991b1b;
+}

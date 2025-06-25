@@ -1,0 +1,114 @@
+[
+  {
+    "serialNumber": 1,
+    "stopname": "Jagnale SQ",
+    "time": 0.294444444444444,
+    "Latitude": 21.1383872206426,
+    "Longitude": 79.1195834698689,
+    "reached": false
+  },
+  {
+    "serialNumber": 2,
+    "stopname": "Chota Tajbagh F",
+    "time": 0.293055555555556,
+    "Latitude": 21.123457272338,
+    "Longitude": 79.1126362882798,
+    "reached": false
+  },
+  {
+    "serialNumber": 3,
+    "stopname": "Opp Priya Bar",
+    "time": 0.295138888888889,
+    "Latitude": 21.1328063171058,
+    "Longitude": 79.1075390303256,
+    "reached": false
+  },
+  {
+    "serialNumber": 4,
+    "stopname": "Shirispeth",
+    "time": 0.296527777777778,
+    "Latitude": 21.1363927259376,
+    "Longitude": 79.1032083340048,
+    "reached": false
+  },
+  {
+    "serialNumber": 5,
+    "stopname": "Godrej A",
+    "time": 0.298611111111111,
+    "Latitude": 21.1400554495118,
+    "Longitude": 79.1007625333523,
+    "reached": false
+  },
+  {
+    "serialNumber": 6,
+    "stopname": "Manglam",
+    "time": 0.300694444444444,
+    "Latitude": 21.1419006048499,
+    "Longitude": 79.100889182126,
+    "reached": false
+  },
+  {
+    "serialNumber": 7,
+    "stopname": "Tata Parsi",
+    "time": 0.303472222222222,
+    "Latitude": 21.1476846112982,
+    "Longitude": 79.1002259803815,
+    "reached": false
+  },
+  {
+    "serialNumber": 8,
+    "stopname": "Empress City",
+    "time": 0.304166666666667,
+    "Latitude": 21.146231688953,
+    "Longitude": 79.0958966964803,
+    "reached": false
+  },
+  {
+    "serialNumber": 9,
+    "stopname": "Ratan Complex",
+    "time": 0.30625,
+    "Latitude": 21.1444776046388,
+    "Longitude": 79.095634239643,
+    "reached": false
+  },
+  {
+    "serialNumber": 10,
+    "stopname": "Bus stand",
+    "time": 0.307638888888889,
+    "Latitude": 21.1395554551361,
+    "Longitude": 79.0958365113008,
+    "reached": false
+  },
+  {
+    "serialNumber": 11,
+    "stopname": "Rahul Complex",
+    "time": 0.307638888888889,
+    "Latitude": 21.1401468254987,
+    "Longitude": 79.0946975501942,
+    "reached": false
+  },
+  {
+    "serialNumber": 12,
+    "stopname": "Katol Naka",
+    "time": 0.3229166666666667,
+    "Latitude": 21.1835639182192,
+    "Longitude": 79.0338421051884,
+    "reached": false
+  },
+  {
+    "serialNumber": 13,
+    "stopname": "Fetri",
+    "time": 0.3298611111111111,
+    "Latitude": 21.2043405108164,
+    "Longitude": 78.9896249181543,
+    "reached": false
+  },
+  {
+    "serialNumber": 14,
+    "stopname": "JIS",
+    "time": 0.3333333333333333,
+    "Latitude": 21.2146719199988,
+    "Longitude": 78.9750369229716,
+    "reached": false
+  }
+]

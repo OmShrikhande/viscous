@@ -2,11 +2,12 @@ import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, AppState } from 'react-native';
 import * as Location from 'expo-location';
 import { onValue, ref, set, get } from 'firebase/database';
-import { doc, updateDoc, getDoc, increment,onSnapshot } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, increment, onSnapshot } from 'firebase/firestore';
 import { realtimeDatabase, firestoreDb } from '../../configs/FirebaseConfigs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as TaskManager from 'expo-task-manager';
 import * as BackgroundFetch from 'expo-background-fetch';
+import { registerListener, useListenerStatus } from '../../utils/firebaseListenerManager';
 
 // Define the background task name
 const LOCATION_TRACKING_TASK = 'location-tracking-task';
@@ -280,14 +281,28 @@ const UserLocationTracker = ({ children }) => {
       }
     });
     
+    // Register the bus location listener with our manager
+    const unregisterBusLocationListener = registerListener(
+      `bus-location-${userEmail}`,
+      busLocationListener,
+      'background' // This can run in background as it's needed for proximity detection
+    );
+    
     // Listen for onboarding status changes
     const userDocRef = doc(firestoreDb, 'userdata', userEmail);
-    const userDocListener = onSnapshot(userDocRef, (docSnapshot) => {
+    const userDocListenerUnsubscribe = onSnapshot(userDocRef, (docSnapshot) => {
       if (docSnapshot.exists()) {
         const data = docSnapshot.data();
         setIsOnboard(data.onboarding === true);
       }
     });
+    
+    // Register the user doc listener with our manager
+    const unregisterUserDocListener = registerListener(
+      `user-onboarding-${userEmail}`,
+      userDocListenerUnsubscribe,
+      'background' // This can run in background as it's needed for onboarding status
+    );
     
     // Start tracking
     startLocationTracking();
@@ -338,8 +353,10 @@ const UserLocationTracker = ({ children }) => {
         }
       });
       
-      busLocationListener();
-      userDocListener();
+      // Unregister listeners using our manager
+      unregisterBusLocationListener();
+      unregisterUserDocListener();
+      
       subscription.remove();
       
       setIsTracking(false);

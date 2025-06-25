@@ -2,6 +2,33 @@
 
 # dependencies
 node_modules/
+Backend/node_modules/
+Backend/Tracking/node_modules/
+Backend/Esp8266 server/node_modules/
+Backend/Bus tracking Admin/node_modules/
+Backend/Bus tracking Admin/Admin/node_modules/
+
+# Backend sensitive files
+Backend/Esp8266 server/serviceAccountKey.json
+Backend/**/serviceAccountKey.json
+Backend/**/firebase.js
+Backend/**/firebaseConfig.js
+Backend/**/*.env
+Backend/**/.env*
+Backend/**/config/*.js
+
+# Backend logs and runtime data
+Backend/**/logs
+Backend/**/*.log
+Backend/**/pids
+Backend/**/*.pid
+Backend/**/*.seed
+Backend/**/*.pid.lock
+
+# Backend coverage and test data
+Backend/**/coverage
+Backend/**/.nyc_output
+Backend/**/lib-cov
 
 # Expo
 .expo/
@@ -47,3 +74,4 @@ android
 .vscode
 app.config.js
 *.txt
+.vscode/

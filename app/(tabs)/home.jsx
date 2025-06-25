@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useRouter } from 'expo-router'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { useEffect, useRef, useState } from 'react'
+import { registerListener, useListenerStatus } from '../../utils/firebaseListenerManager'
 import { Animated, RefreshControl, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import BusCapacityIndicator from '../../components/home/BusCapacityIndicator'
 import BusStopNotifications from '../../components/home/BusStopNotifications'
@@ -45,7 +46,7 @@ export default function  Home() {
         }
         
         const userDocRef = doc(firestoreDb, 'userdata', userData.email);
-        const unsub = onSnapshot(userDocRef, (docSnap) => {
+        const userDataListener = onSnapshot(userDocRef, (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
             setIsDark(data.isDark === true);
@@ -67,7 +68,14 @@ export default function  Home() {
           }
         });
         
-        return () => unsub();
+        // Register with our listener manager
+        const unregisterUserDataListener = registerListener(
+          `home-user-data-${userData.email}`,
+          userDataListener,
+          'foreground' // Only needed when home screen is visible
+        );
+        
+        return () => unregisterUserDataListener();
       } catch (err) {
         console.error('Failed to fetch user data:', err);
       }
