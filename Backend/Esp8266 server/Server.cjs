@@ -55,7 +55,7 @@ const time = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds
 });
 
 // Start server
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT3 || 3001;
 app.listen(PORT, () => {
   console.log(`🚀 ESP8266 Server started on port ${PORT}`);
 });
