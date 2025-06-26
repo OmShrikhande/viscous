@@ -8,26 +8,40 @@ const mongoose = require('mongoose');
 exports.registerAdmin = async (req, res) => {
   try {
     const { email, password } = req.body;
+    
+    // Check if MongoDB is connected
+    if (mongoose.connection.readyState !== 1) {
+      console.error("MongoDB not connected - Cannot register without database connection");
+      return res.status(500).json({ message: 'Database connection error. Please try again later.' });
+    }
+    
+    // Check if admin already exists
+    const existingAdmin = await Admin.findOne({ email: email.toLowerCase().trim() });
+    if (existingAdmin) {
+      return res.status(400).json({ message: 'Email already registered' });
+    }
+    
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newAdmin = new Admin({ email, password: hashedPassword });
+    const newAdmin = new Admin({ 
+      email: email.toLowerCase().trim(), 
+      password: hashedPassword,
+      username: email.split('@')[0], // Set default username from email
+      loginHistory: [],
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    
     await newAdmin.save();
+    console.log("New admin registered:", email);
     res.status(201).json({ message: 'Admin registered successfully' });
   } catch (err) {
+    console.error("Registration error:", err);
     res.status(500).json({ error: err.message });
   }
 };
 
-// Mock admin users for development/demo
-const mockAdmins = [
-  {
-    id: "kuldeep-user-id",
-    email: "kuldeept.cse22@sbjit.edu.in",
-    username: "kuldeep",
-    // This is the hashed version of "123456789" to match createAdminUser.js
-    password: "$2a$10$3Iy9sPf.UGBToA8TZqyXsOiPRjQn9.4svpZFz1RxHrwLULdOiXMp2" 
-  },
-  
-];
+// No mock admins - using real database only
 
 exports.loginAdmin = async (req, res) => {
   try {
@@ -35,142 +49,76 @@ exports.loginAdmin = async (req, res) => {
     const normalizedEmail = email.toLowerCase().trim();
     console.log("Login attempt:", normalizedEmail);
 
-    // First try to use mock data (always available)
-    const mockAdmin = mockAdmins.find(admin => admin.email === normalizedEmail);
-    
-    if (mockAdmin) {
-      console.log("Found mock admin:", mockAdmin.email);
-      
-      let isMatch = false;
-      
-      // Special case for development - allow direct password match for specific users
-      if (normalizedEmail === "kuldeept.cse22@sbjit.edu.in" && password === "123456789") {
-        console.log("Development mode: Direct password match for kuldeept.cse22@sbjit.edu.in");
-        isMatch = true;
-      } else {
-        // Verify password against mock admin using bcrypt
-        isMatch = await bcrypt.compare(password, mockAdmin.password);
-        console.log("Password match result:", isMatch);
-      }
-      
-      if (!isMatch) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Invalid credentials (wrong password)' 
-        });
-      }
-      
-      // Generate token for mock admin using a hardcoded secret for development
-      const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-for-development';
-      const token = jwt.sign({ id: mockAdmin.id }, JWT_SECRET, { expiresIn: '7d' });
-      
-      return res.json({
-        success: true,
-        token,
-        admin: {
-          id: mockAdmin.id,
-          email: mockAdmin.email,
-          username: mockAdmin.username
-        },
-        message: "Login successful (using mock data)"
+    // Check if MongoDB is connected
+    if (mongoose.connection.readyState !== 1) {
+      console.error("MongoDB not connected - Cannot login without database connection");
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Database connection error. Please try again later.' 
       });
     }
     
-    // If not found in mock data and MongoDB is connected, try database
-    if (mongoose.connection.readyState === 1) {
-      try {
-        const admin = await Admin.findOne({ email: normalizedEmail });
-        console.log("Admin found in DB:", admin ? admin.email : "none");
-        
-        if (!admin) {
-          return res.status(400).json({ 
-            success: false, 
-            message: 'Invalid credentials (email not found)' 
-          });
-        }
-        
-        const isMatch = await bcrypt.compare(password, admin.password);
-        console.log("Password match result:", isMatch);
-        
-        if (!isMatch) {
-          return res.status(400).json({ 
-            success: false, 
-            message: 'Invalid credentials (wrong password)' 
-          });
-        }
-        
-        // Update login history and last login
-        const loginEntry = {
-          loginTime: new Date(),
-          ipAddress: req.ip || req.connection.remoteAddress,
-          userAgent: req.get('User-Agent')
-        };
-        
-        admin.loginHistory.push(loginEntry);
-        admin.lastLogin = new Date();
-        
-        // Keep only last 10 login records
-        if (admin.loginHistory.length > 10) {
-          admin.loginHistory = admin.loginHistory.slice(-10);
-        }
-        
-        try {
-          await admin.save();
-        } catch (saveErr) {
-          console.error("Error saving login history:", saveErr);
-          // Continue with login even if saving history fails
-        }
-        
-        const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-for-development';
-        const token = jwt.sign({ id: admin._id }, JWT_SECRET, { expiresIn: '7d' });
-        
-        return res.json({
-          success: true,
-          token,
-          admin: {
-            id: admin._id,
-            email: admin.email,
-            username: admin.username || admin.email.split('@')[0]
-          }
-        });
-      } catch (dbErr) {
-        console.error("Database error during login:", dbErr);
-        // If DB error, fall back to mock data response below
-      }
-    }
+    // Find admin in database
+    const admin = await Admin.findOne({ email: normalizedEmail });
+    console.log("Admin found in DB:", admin ? admin.email : "none");
     
-    // If we get here, the user wasn't found in mock data and either:
-    // 1. MongoDB is not connected, or
-    // 2. There was an error with the MongoDB query
-    
-    // Special case for the specific user in the error message
-    if (normalizedEmail === "kuldeept.cse22@sbjit.edu.in") {
-      const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-for-development';
-      const demoToken = jwt.sign({ id: "kuldeep-user-id" }, JWT_SECRET, { expiresIn: '7d' });
-      return res.json({
-        success: true,
-        token: demoToken,
-        admin: {
-          id: "kuldeep-user-id",
-          email: "kuldeept.cse22@sbjit.edu.in",
-          username: "kuldeep"
-        },
-        message: "Login successful (special case)"
+    if (!admin) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid credentials (email not found)' 
       });
     }
     
-    // For any other email not in mock data
-    return res.status(400).json({ 
-      success: false, 
-      message: 'Invalid credentials. Try using kuldeept.cse22@sbjit.edu.in with password 123456789' 
+    const isMatch = await bcrypt.compare(password, admin.password);
+    console.log("Password match result:", isMatch);
+    
+    if (!isMatch) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid credentials (wrong password)' 
+      });
+    }
+    
+    // Update login history and last login
+    const loginEntry = {
+      loginTime: new Date(),
+      ipAddress: req.ip || req.connection.remoteAddress,
+      userAgent: req.get('User-Agent')
+    };
+    
+    admin.loginHistory.push(loginEntry);
+    admin.lastLogin = new Date();
+    
+    // Keep only last 10 login records
+    if (admin.loginHistory.length > 10) {
+      admin.loginHistory = admin.loginHistory.slice(-10);
+    }
+    
+    try {
+      await admin.save();
+    } catch (saveErr) {
+      console.error("Error saving login history:", saveErr);
+      // Continue with login even if saving history fails
+    }
+    
+    const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-for-development';
+    const token = jwt.sign({ id: admin._id }, JWT_SECRET, { expiresIn: '7d' });
+    
+    return res.json({
+      success: true,
+      token,
+      admin: {
+        id: admin._id,
+        email: admin.email,
+        username: admin.username || admin.email.split('@')[0]
+      }
     });
-    
   } catch (err) {
     console.error("Login error:", err);
     res.status(500).json({ 
       success: false, 
       error: err.message,
-      message: 'Server error. Try using kuldeept.cse22@sbjit.edu.in with password 123456789'
+      message: 'Server error. Please try again later.'
     });
   }
 };

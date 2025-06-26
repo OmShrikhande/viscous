@@ -25,15 +25,34 @@ const Register = () => {
     }
 
     try {
+      console.log('Attempting to register with:', { email: email.trim() });
+      
       const res = await axios.post('http://localhost:5000/api/admin/register', {
         email: email.trim(),
         password: password.trim(),
       });
 
+      console.log('Registration response:', res.data);
       toast.success('Registration successful! Redirecting to login...');
       setTimeout(() => navigate('/'), 1500);
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Registration failed');
+      console.error('Registration error:', err);
+      
+      if (err.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        console.error('Error response data:', err.response.data);
+        console.error('Error response status:', err.response.status);
+        toast.error(err.response.data?.message || `Error ${err.response.status}: Registration failed`);
+      } else if (err.request) {
+        // The request was made but no response was received
+        console.error('No response received:', err.request);
+        toast.error('Server not responding. Please try again later.');
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        console.error('Request setup error:', err.message);
+        toast.error('Error setting up request: ' + err.message);
+      }
     }
   };
 
