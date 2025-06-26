@@ -1,7 +1,7 @@
 # 🚌 Viscous - Real-Time Bus Tracking App 🚌
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/expo/expo/main/apps/native-component-list/assets/images/expo-icon.png" alt="Viscous Logo" width="200"/>
+  <img src="./assets/images/bustrackerlogo.png" alt="Viscous Logo" width="200"/>
   <br>
   <p><i>Track your bus in real-time with style and precision</i></p>
 </div>

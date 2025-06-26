@@ -19,6 +19,7 @@
     "@react-navigation/bottom-tabs": "^7.3.10",
     "@react-navigation/elements": "^2.3.8",
     "@react-navigation/native": "^7.1.6",
+    "eas-cli": "^16.13.1",
     "expo": "^53.0.12",
     "expo-background-fetch": "^13.1.5",
     "expo-blur": "~14.1.5",

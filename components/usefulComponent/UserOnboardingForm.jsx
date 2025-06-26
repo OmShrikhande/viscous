@@ -4,17 +4,17 @@ import { BlurView } from 'expo-blur';
 import { collection, doc, getDocs, serverTimestamp, setDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { firestoreDb as db } from '../../configs/FirebaseConfigs';
@@ -100,6 +100,14 @@ const UserOnboardingForm = ({ onComplete, isDark }) => {
       
       // Save to Firestore
       const userRef = doc(db, 'userdata', email);
+      
+      // Get the user role from AsyncStorage or default to 'user'
+      let role = 'user'; // Default role
+      const storedRole = await AsyncStorage.getItem('userRole');
+      if (storedRole) {
+        role = storedRole;
+      }
+      
       const userData = {
         name: fullName,
         email,
@@ -107,6 +115,7 @@ const UserOnboardingForm = ({ onComplete, isDark }) => {
         routeNumber,
         busStop,
         image: user.imageUrl,
+        role, // Ensure role is always included
         lastUpdated: serverTimestamp(),
         createdAt: serverTimestamp(),
         isDark: isDark || false

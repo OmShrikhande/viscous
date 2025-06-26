@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { Alert, Dimensions, StyleSheet, Switch } from 'react-native';
+import { Alert, Dimensions, StyleSheet, Switch,View } from 'react-native';
 import Animated, {
     Easing,
     interpolateColor,
@@ -116,20 +116,25 @@ const ThemeToggleSwitch = ({ currentValue, userEmail, onToggle }) => {
   return (
     <Animated.View style={[styles.container, containerAnimatedStyle]}>
       <BlurView intensity={20} style={styles.blurContainer} tint={currentValue ? 'dark' : 'light'}>
-        <Animated.Text style={[styles.label, textAnimatedStyle]}>
-          {currentValue ? 'Dark Mode' : 'Light Mode'}
-        </Animated.Text>
-        
-        <Animated.View style={iconAnimatedStyle}>
+        <View style={styles.header}>
+          <Animated.View style={[styles.iconContainer, iconAnimatedStyle]}>
+            <Animated.Text style={styles.iconText}>
+              {currentValue ? '🌙' : '☀️'}
+            </Animated.Text>
+          </Animated.View>
+          
+          <Animated.Text style={[styles.label, textAnimatedStyle]}>
+            {currentValue ? 'Dark Mode' : 'Light Mode'}
+          </Animated.Text>
+          
           <Switch
             value={currentValue}
             onValueChange={handleToggle}
             thumbColor={currentValue ? '#1E90FF' : '#d3d3d3'}
             trackColor={{ false: '#767577', true: '#81b0ff' }}
             disabled={isUpdating}
-            style={styles.switch}
           />
-        </Animated.View>
+        </View>
         
         <Animated.Text style={[styles.description, textAnimatedStyle]}>
           {currentValue 
@@ -147,40 +152,46 @@ const { width } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 20,
+    marginVertical: 10,
+    borderRadius: 16,
     overflow: 'hidden',
-    width: width * 0.9,
+    width: '100%',
     alignSelf: 'center',
-    elevation: 5,
+    elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
   },
   blurContainer: {
     width: '100%',
-    padding: 20,
+    padding: 16,
+  },
+  header: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  iconContainer: {
+    width: 28,
+    height: 28,
     justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iconText: {
+    fontSize: 18,
   },
   label: {
-    fontSize: 18,
-    marginBottom: 15,
+    fontSize: 16,
     fontFamily: 'flux-bold',
-    textAlign: 'center',
-  },
-  switch: {
-    transform: [{ scaleX: 1.2 }, { scaleY: 1.2 }],
-    marginVertical: 10,
+    flex: 1,
+    marginLeft: 10,
   },
   description: {
     fontSize: 14,
-    marginTop: 15,
-    fontFamily: 'flux-medium',
-    textAlign: 'center',
+    fontFamily: 'flux',
+    marginLeft: 38,
     opacity: 0.8,
   },
 });

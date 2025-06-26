@@ -6,25 +6,24 @@ import { useRouter } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
-    Dimensions,
-    Image,
-    Share,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    useColorScheme,
-    View
+  Dimensions,
+  Image,
+  Share,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useColorScheme,
+  View
 } from 'react-native';
 import Animated, {
-    FadeInDown,
-    useAnimatedStyle,
-    useSharedValue,
-    withSequence,
-    withTiming,
-    ZoomIn
+  FadeInDown,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withTiming,
+  ZoomIn
 } from 'react-native-reanimated';
 import { firestoreDb } from '../../configs/FirebaseConfigs';
-import { Colors } from '../../constants/Colors';
 
 export default function MenuList({ isDark }) {
   const { signOut } = useAuth();
@@ -56,6 +55,13 @@ export default function MenuList({ isDark }) {
       }
     };
     fetchApkLink();
+    
+    // Cleanup function to reset animation values when component unmounts
+    return () => {
+      // Reset animation values to prevent errors during unmount
+      itemScales.value = [1, 1];
+      itemRotations.value = [0, 0];
+    };
   }, []);
 
   const menulist = [
@@ -76,26 +82,42 @@ export default function MenuList({ isDark }) {
   ];
   
   const animateItem = (index) => {
-    // Create a new array to avoid mutating the shared value directly
-    const newScales = [...itemScales.value];
-    newScales[index] = withSequence(
-      withTiming(0.95, { duration: 100 }),
-      withTiming(1.05, { duration: 100 }),
-      withTiming(1, { duration: 100 })
-    );
-    itemScales.value = newScales;
-    
-    // Animate rotation
-    const newRotations = [...itemRotations.value];
-    newRotations[index] = withSequence(
-      withTiming(-5, { duration: 100 }),
-      withTiming(5, { duration: 100 }),
-      withTiming(0, { duration: 100 })
-    );
-    itemRotations.value = newRotations;
-    
-    // Trigger haptic feedback
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      // Safely create new arrays with proper checks
+      if (!itemScales.value || !Array.isArray(itemScales.value)) {
+        itemScales.value = [1, 1];
+      }
+      
+      if (!itemRotations.value || !Array.isArray(itemRotations.value)) {
+        itemRotations.value = [0, 0];
+      }
+      
+      // Create a new array to avoid mutating the shared value directly
+      const newScales = [...itemScales.value];
+      newScales[index] = withSequence(
+        withTiming(0.95, { duration: 100 }),
+        withTiming(1.05, { duration: 100 }),
+        withTiming(1, { duration: 100 })
+      );
+      itemScales.value = newScales;
+      
+      // Animate rotation
+      const newRotations = [...itemRotations.value];
+      newRotations[index] = withSequence(
+        withTiming(-5, { duration: 100 }),
+        withTiming(5, { duration: 100 }),
+        withTiming(0, { duration: 100 })
+      );
+      itemRotations.value = newRotations;
+      
+      // Trigger haptic feedback
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch (error) {
+      console.error('Animation error:', error);
+      // Reset to safe values if there's an error
+      itemScales.value = [1, 1];
+      itemRotations.value = [0, 0];
+    }
   };
 
   const onMenuClick = (item, index) => {
@@ -106,6 +128,11 @@ export default function MenuList({ isDark }) {
     setTimeout(async () => {
       if (item.path === 'logout') {
         try {
+          // Reset animation values to prevent errors during unmount
+          itemScales.value = [1, 1];
+          itemRotations.value = [0, 0];
+          
+          // Clear storage and sign out
           await AsyncStorage.clear(); // Clear all stored data
           await signOut();
         } catch (error) {
@@ -115,7 +142,7 @@ export default function MenuList({ isDark }) {
       }
       if (item.path === 'share') {
         Share.share({
-          message: `The S.B. Jain Bus Tracker App is a smart solution developed by Om Shrikhande 🎓, a 3rd-year CSE student, and Kuldeep Tiwari 🛠️, the IoT developer, to streamline institute transportation. With 🚌 Real-Time Bus Tracking, 📅 ETA updates, and 🗺️ Interactive Maps, the app ensures students and staff can track buses easily and plan commutes effectively. Its 🤝 User-Friendly Interface offers a seamless experience, making it a valuable tool for the S.B. Jain community. 🚀 Download the app here: ${apkLink || 'Link not available'}. If you are interested in Development contact us on LinkedIn.`,
+          message: `The Viscous Bus Tracker App is a smart solution developed by Om Shrikhande 🎓, a 3rd-year CSE student, and Kuldeep Tiwari 🛠️, the IoT developer, to streamline institute transportation. With 🚌 Real-Time Bus Tracking, 📅 ETA updates, and 🗺️ Interactive Maps, the app ensures students and staff can track buses easily and plan commutes effectively. Its 🤝 User-Friendly Interface offers a seamless experience, making it a valuable tool for the Viscous community. 🚀 Download the app here: ${apkLink || 'Link not available'}. If you are interested in Development contact us on LinkedIn.`,
         });
         return;
       }
@@ -124,21 +151,29 @@ export default function MenuList({ isDark }) {
     }, 300);
   };
 
-  // Create animated styles for each menu item at the component level
+  // Create animated styles for each menu item at the component level with improved safety checks
   const animatedStyle0 = useAnimatedStyle(() => {
+    // Safely access array values with null coalescing
+    const scale = (itemScales.value && itemScales.value[0] !== undefined) ? itemScales.value[0] : 1;
+    const rotation = (itemRotations.value && itemRotations.value[0] !== undefined) ? itemRotations.value[0] : 0;
+    
     return {
       transform: [
-        { scale: itemScales.value[0] || 1 },
-        { rotate: `${itemRotations.value[0] || 0}deg` }
+        { scale },
+        { rotate: `${rotation}deg` }
       ],
     };
   });
   
   const animatedStyle1 = useAnimatedStyle(() => {
+    // Safely access array values with null coalescing
+    const scale = (itemScales.value && itemScales.value[1] !== undefined) ? itemScales.value[1] : 1;
+    const rotation = (itemRotations.value && itemRotations.value[1] !== undefined) ? itemRotations.value[1] : 0;
+    
     return {
       transform: [
-        { scale: itemScales.value[1] || 1 },
-        { rotate: `${itemRotations.value[1] || 0}deg` }
+        { scale },
+        { rotate: `${rotation}deg` }
       ],
     };
   });
@@ -162,25 +197,35 @@ export default function MenuList({ isDark }) {
           >
             <TouchableOpacity
               onPress={() => onMenuClick(item, index)}
-              activeOpacity={0.8}
+              activeOpacity={0.7}
+              style={styles.touchableContainer}
             >
               <BlurView
-                intensity={20}
+                intensity={15}
                 tint={currentTheme ? 'dark' : 'light'}
                 style={[
                   styles.card,
                   {
-                    borderColor: currentTheme ? Colors.PRIMARY : Colors.SECONDARY,
+                    backgroundColor: currentTheme ? 'rgba(30, 144, 255, 0.1)' : 'rgba(255, 255, 255, 0.8)',
                   },
                 ]}
               >
-                <Image source={item.icon} style={styles.icon} />
-                <Text style={[styles.name, { color: currentTheme ? Colors.PRIMARY : Colors.SECONDARY }]}>
-                  {item.name}
-                </Text>
-                <Text style={[styles.description, { color: currentTheme ? '#aaa' : '#666' }]}>
-                  {item.description}
-                </Text>
+                <View style={styles.cardContent}>
+                  <View style={[
+                    styles.iconContainer, 
+                    { backgroundColor: currentTheme ? 'rgba(30, 144, 255, 0.2)' : 'rgba(30, 144, 255, 0.1)' }
+                  ]}>
+                    <Image source={item.icon} style={styles.icon} />
+                  </View>
+                  <View style={styles.textContainer}>
+                    <Text style={[styles.name, { color: currentTheme ? '#07004D' : '#A41623' }]}>
+                      {item.name}
+                    </Text>
+                    <Text style={[styles.description, { color: currentTheme ? '#aaa' : '#666' }]}>
+                      {item.description}
+                    </Text>
+                  </View>
+                </View>
               </BlurView>
             </TouchableOpacity>
           </Animated.View>
@@ -198,43 +243,51 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   menuGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: 'column',
+    justifyContent: 'flex-start',
+    alignItems: 'stretch',
+  },
+  touchableContainer: {
+    marginVertical: 6,
   },
   card: {
-    margin: 8,
-    padding: 20,
-    borderRadius: 20,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 160,
-    width: width * 0.42,
+    padding: 16,
+    borderRadius: 16,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  iconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
   },
   icon: {
-    width: 60,
-    height: 60,
-    marginBottom: 15,
+    width: 28,
+    height: 28,
     resizeMode: 'contain',
   },
+  textContainer: {
+    flex: 1,
+  },
   name: {
-    fontSize: 18,
+    fontSize: 16,
     fontFamily: 'flux-bold',
-    textAlign: 'center',
-    marginBottom: 5,
+    marginBottom: 4,
   },
   description: {
     fontSize: 12,
     fontFamily: 'flux-medium',
-    textAlign: 'center',
     opacity: 0.8,
   },
 });

@@ -22,11 +22,17 @@ export default function UserDataManager() {
         const docSnap = await getDoc(userRef);
         const defaultRole = await AsyncStorage.getItem('userRole') || 'user';
 
+        // Ensure role is never undefined
+        let role = defaultRole; // Default to 'user' or whatever is in AsyncStorage
+        if (docSnap.exists() && docSnap.data().role) {
+          role = docSnap.data().role;
+        }
+        
         const userData = {
           name,
           email,
           image,
-          role: docSnap.exists() ? docSnap.data().role : defaultRole,
+          role, // Use the safely determined role
           isDark: false,
           lastUpdated: serverTimestamp(),
         };

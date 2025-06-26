@@ -1,20 +1,20 @@
 import { useUser } from '@clerk/clerk-expo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
-import { collection, doc, getDocs, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, serverTimestamp, setDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { firestoreDb as db } from '../../configs/FirebaseConfigs';
@@ -42,6 +42,9 @@ const EditProfileForm = ({ visible, onClose, userData, isDark, onUpdate }) => {
 
   // Fetch bus stops when route number changes
   useEffect(() => {
+    // Create a cache key for this route
+    const cacheKey = `busStops_route_${routeNumber}`;
+    
     const fetchBusStops = async () => {
       if (!routeNumber || routeNumber.trim() === '') return;
       
@@ -49,6 +52,18 @@ const EditProfileForm = ({ visible, onClose, userData, isDark, onUpdate }) => {
       console.log(`Fetching bus stops for route ${routeNumber}...`);
       
       try {
+        // First check if we have cached data
+        const cachedStops = await AsyncStorage.getItem(cacheKey);
+        
+        if (cachedStops) {
+          console.log(`Using cached bus stops for route ${routeNumber}`);
+          setAvailableStops(JSON.parse(cachedStops));
+          setIsLoadingStops(false);
+          return;
+        }
+        
+        // If no cache, fetch from Firestore
+        console.log(`Fetching bus stops for route ${routeNumber} from Firestore`);
         const routeCollectionName = `Route${routeNumber}`;
         console.log(`Looking for collection: ${routeCollectionName}`);
         
@@ -64,6 +79,10 @@ const EditProfileForm = ({ visible, onClose, userData, isDark, onUpdate }) => {
         } else {
           const stops = stopsSnapshot.docs.map(doc => doc.id);
           console.log('Available stops:', stops);
+          
+          // Cache the results
+          await AsyncStorage.setItem(cacheKey, JSON.stringify(stops));
+          
           setAvailableStops(stops);
         }
       } catch (error) {
@@ -77,6 +96,17 @@ const EditProfileForm = ({ visible, onClose, userData, isDark, onUpdate }) => {
 
     fetchBusStops();
   }, [routeNumber]);
+
+  // Function to clear bus stops cache for a specific route
+  const clearBusStopsCache = async (routeNum) => {
+    try {
+      const cacheKey = `busStops_route_${routeNum}`;
+      await AsyncStorage.removeItem(cacheKey);
+      console.log(`Cleared bus stops cache for route ${routeNum}`);
+    } catch (error) {
+      console.error('Error clearing bus stops cache:', error);
+    }
+  };
 
   const handleSubmit = async () => {
     console.log('Submitting profile update...');
@@ -120,6 +150,20 @@ const EditProfileForm = ({ visible, onClose, userData, isDark, onUpdate }) => {
         throw new Error('User email not found');
       }
       
+      // Get the user role from AsyncStorage or default to 'user'
+      let role = 'user'; // Default role
+      const storedRole = await AsyncStorage.getItem('userRole');
+      if (storedRole) {
+        role = storedRole;
+      }
+      
+      // Get existing data to preserve role if it exists
+      const userRef = doc(db, 'userdata', email);
+      const docSnap = await getDoc(userRef);
+      if (docSnap.exists() && docSnap.data().role) {
+        role = docSnap.data().role;
+      }
+      
       // Prepare user data
       const userData = {
         name: fullName,
@@ -128,13 +172,13 @@ const EditProfileForm = ({ visible, onClose, userData, isDark, onUpdate }) => {
         routeNumber,
         busStop,
         image: user.imageUrl,
+        role, // Ensure role is always included
         lastUpdated: serverTimestamp(),
       };
       
       console.log('Saving to Firestore:', userData);
       
-      // Save to Firestore
-      const userRef = doc(db, 'userdata', email);
+      // Save to Firestore (userRef is already defined above)
       await setDoc(userRef, userData, { merge: true });
       console.log('✅ Firestore update successful');
       
@@ -273,7 +317,31 @@ const EditProfileForm = ({ visible, onClose, userData, isDark, onUpdate }) => {
                   entering={FadeInDown.delay(500).springify()}
                   style={styles.inputGroup}
                 >
-                  <Text style={[styles.label, { color: textColor }]}>Your Bus Stop</Text>
+                  <View style={styles.labelRow}>
+                    <Text style={[styles.label, { color: textColor }]}>Your Bus Stop</Text>
+                    {routeNumber && (
+                      <TouchableOpacity 
+                        onPress={async () => {
+                          // Clear cache and refetch
+                          await clearBusStopsCache(routeNumber);
+                          
+                          // Reset state
+                          setBusStop('');
+                          setAvailableStops([]);
+                          
+                          // Trigger refetch by changing and restoring route number
+                          const currentRoute = routeNumber;
+                          setRouteNumber('');
+                          setTimeout(() => setRouteNumber(currentRoute), 100);
+                          
+                          Alert.alert('Refreshing', 'Bus stops list is being refreshed...');
+                        }}
+                        style={styles.refreshButton}
+                      >
+                        <Text style={styles.refreshButtonText}>Refresh</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                   <TouchableOpacity
                     onPress={() => {
                       if (routeNumber) {
@@ -407,10 +475,26 @@ const styles = StyleSheet.create({
     width: '100%',
     marginBottom: 16,
   },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
   label: {
     fontSize: 14,
     fontFamily: 'flux-medium',
-    marginBottom: 6,
+  },
+  refreshButton: {
+    backgroundColor: 'rgba(30, 144, 255, 0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  refreshButtonText: {
+    color: '#1E90FF',
+    fontSize: 12,
+    fontFamily: 'flux-medium',
   },
   input: {
     width: '100%',

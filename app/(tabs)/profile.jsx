@@ -1,26 +1,27 @@
+
 import { useUser } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import { useCallback, useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    Platform,
-    SafeAreaView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Platform,
+  SafeAreaView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import Animated, {
-    FadeIn,
-    useAnimatedStyle,
-    useSharedValue,
-    withSpring,
-    withTiming
+  FadeIn,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming
 } from 'react-native-reanimated';
 
 import BusNotificationsToggle from '../../components/Profile/BusNotificationsToggle';
@@ -115,25 +116,33 @@ export default function Profile() {
       cardOpacity.value = withTiming(1, { duration: 800 });
       profileInfoY.value = withTiming(0, { duration: 600 });
     }
+    
+    // Cleanup function to reset animation values when component unmounts
+    return () => {
+      // Reset animation values to prevent errors during unmount
+      avatarScale.value = 1;
+      cardOpacity.value = 0;
+      profileInfoY.value = 0;
+    };
   }, [isLoading, avatarScale, cardOpacity, profileInfoY]);
   
-  // Animated styles
+  // Animated styles with safety checks
   const avatarAnimatedStyle = useAnimatedStyle(() => {
     return {
-      transform: [{ scale: avatarScale.value }],
+      transform: [{ scale: avatarScale.value ?? 1 }],
     };
   });
   
   const cardAnimatedStyle = useAnimatedStyle(() => {
     return {
-      opacity: cardOpacity.value,
+      opacity: cardOpacity.value ?? 0,
     };
   });
   
   const profileInfoAnimatedStyle = useAnimatedStyle(() => {
     return {
-      transform: [{ translateY: profileInfoY.value }],
-      opacity: cardOpacity.value,
+      transform: [{ translateY: profileInfoY.value ?? 0 }],
+      opacity: cardOpacity.value ?? 0,
     };
   });
 
@@ -287,40 +296,47 @@ export default function Profile() {
               entering={FadeIn.duration(500).delay(500)}
             >
               <View style={styles.sectionHeader}>
-                <Ionicons name="settings-outline" size={22} color={isDark ? '#1E90FF' : '#1E90FF'} />
-                <Text style={[styles.sectionTitle, textColor]}>Settings</Text>
+                <View style={styles.sectionTitleContainer}>
+                  <Ionicons name="settings-outline" size={22} color={isDark ? '#1E90FF' : '#1E90FF'} />
+                  <Text style={[styles.sectionTitle, textColor]}>Settings</Text>
+                </View>
               </View>
 
-              {/* Theme Toggle */}
-              <Animated.View
-                entering={FadeIn.duration(500).delay(600)}
-              >
-                <ThemeToggleSwitch
-                  currentValue={isDark}
-                  userEmail={userEmail}
-                  onToggle={(newVal) => setIsDark(newVal)}
-                />
-              </Animated.View>
-              
-              {/* Bus Notifications Toggle */}
-              <Animated.View
-                entering={FadeIn.duration(500).delay(700)}
-              >
-                <BusNotificationsToggle
-                  isDark={isDark}
-                  userEmail={userEmail}
-                />
-              </Animated.View>
+              <View style={styles.settingsCardContainer}>
+                {/* Theme Toggle */}
+                <Animated.View
+                  entering={FadeIn.duration(500).delay(600)}
+                  style={styles.settingItem}
+                >
+                  <ThemeToggleSwitch
+                    currentValue={isDark}
+                    userEmail={userEmail}
+                    onToggle={(newVal) => setIsDark(newVal)}
+                  />
+                </Animated.View>
+                
+                {/* Bus Notifications Toggle */}
+                <Animated.View
+                  entering={FadeIn.duration(500).delay(700)}
+                  style={styles.settingItem}
+                >
+                  <BusNotificationsToggle
+                    isDark={isDark}
+                    userEmail={userEmail}
+                  />
+                </Animated.View>
 
-              {/* Speed Monitoring Toggle */}
-              <Animated.View
-                entering={FadeIn.duration(500).delay(750)}
-              >
-                <SpeedMonitoringToggle
-                  isDark={isDark}
-                  userEmail={userEmail}
-                />
-              </Animated.View>
+                {/* Speed Monitoring Toggle */}
+                <Animated.View
+                  entering={FadeIn.duration(500).delay(750)}
+                  style={styles.settingItem}
+                >
+                  <SpeedMonitoringToggle
+                    isDark={isDark}
+                    userEmail={userEmail}
+                  />
+                </Animated.View>
+              </View>
             </Animated.View>
 
             {/* Menu Section */}
@@ -329,8 +345,10 @@ export default function Profile() {
               entering={FadeIn.duration(500).delay(800)}
             >
               <View style={styles.sectionHeader}>
-                <Ionicons name="menu-outline" size={22} color={isDark ? '#1E90FF' : '#1E90FF'} />
-                <Text style={[styles.sectionTitle, textColor]}>Menu</Text>
+                <View style={styles.sectionTitleContainer}>
+                  <Ionicons name="menu-outline" size={22} color={isDark ? '#1E90FF' : '#1E90FF'} />
+                  <Text style={[styles.sectionTitle, textColor]}>Quick Actions</Text>
+                </View>
               </View>
               
               <Animated.View style={styles.menuContainer}>
@@ -344,8 +362,10 @@ export default function Profile() {
               entering={FadeIn.duration(500).delay(900)}
             >
               <View style={styles.sectionHeader}>
-                <Ionicons name="code-outline" size={22} color={isDark ? '#1E90FF' : '#1E90FF'} />
-                <Text style={[styles.sectionTitle, textColor]}>Developer Tools</Text>
+                <View style={styles.sectionTitleContainer}>
+                  <Ionicons name="code-outline" size={22} color={isDark ? '#1E90FF' : '#1E90FF'} />
+                  <Text style={[styles.sectionTitle, textColor]}>Developer Tools</Text>
+                </View>
               </View>
               
               <Animated.View style={styles.testNotificationsContainer}>
@@ -526,13 +546,26 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 15,
     paddingHorizontal: 5,
+  },
+  sectionTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   sectionTitle: {
     fontSize: 18,
     fontFamily: 'flux-bold',
     marginLeft: 8,
+  },
+  settingsCardContainer: {
+    backgroundColor: 'transparent',
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  settingItem: {
+    marginBottom: 8,
   },
   menuContainer: {
     marginTop: 5,
