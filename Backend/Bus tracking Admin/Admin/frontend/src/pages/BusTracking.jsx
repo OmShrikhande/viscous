@@ -38,33 +38,62 @@ const BusTracking = () => {
     
     try {
       const token = localStorage.getItem('token');
+      console.log(`Fetching current location for bus ${userId}`);
+      
       const response = await axios.get(`http://localhost:5000/api/bus-location/${userId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
       if (response.data.success) {
         console.log('Current location data source:', response.data.source);
+        console.log('Raw current location data:', response.data.location);
         
-        // Ensure coordinates are numbers
+        // Ensure coordinates are numbers and valid
         const location = response.data.location;
         if (location) {
-          setCurrentLocation({
-            ...location,
-            latitude: parseFloat(location.latitude),
-            longitude: parseFloat(location.longitude),
-            speed: parseFloat(location.speed || 0)
-          });
+          const lat = parseFloat(location.latitude);
+          const lng = parseFloat(location.longitude);
+          
+          // Check if coordinates are valid
+          if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+            const processedLocation = {
+              ...location,
+              latitude: lat,
+              longitude: lng,
+              speed: parseFloat(location.speed || 0)
+            };
+            
+            console.log('Processed current location:', processedLocation);
+            setCurrentLocation(processedLocation);
+            
+            // If data is from Firebase, show a success message
+            if (response.data.source === 'firebase') {
+              setError(null);
+              toast.success('Successfully fetched real-time data from Firebase!');
+            }
+          } else {
+            console.warn('Invalid coordinates in current location:', location);
+            setCurrentLocation(null);
+            toast.info('Current location has invalid coordinates', {
+              position: "top-right",
+              autoClose: 3000
+            });
+          }
         } else {
+          console.log('No current location data available');
           setCurrentLocation(null);
-        }
-        
-        // If data is from Firebase, show a success message
-        if (response.data.source === 'firebase') {
-          setError(null);
-          toast.success('Successfully fetched real-time data from Firebase!');
+          toast.info('No current location data available', {
+            position: "top-right",
+            autoClose: 3000
+          });
         }
       } else {
-        setError('Failed to fetch current location');
+        console.error('API returned success: false');
+        toast.error('Failed to fetch current location', {
+          position: "top-right",
+          autoClose: 3000
+        });
+        setCurrentLocation(null);
       }
     } catch (err) {
       console.error('Error fetching current location:', err);
@@ -84,15 +113,31 @@ const BusTracking = () => {
     
     try {
       const token = localStorage.getItem('token');
+      console.log(`Fetching location history for bus ${userId} on date ${selectedDate}`);
+      
       const response = await axios.get(`http://localhost:5000/api/bus-location/${userId}/history?date=${selectedDate}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
       if (response.data.success) {
         console.log('Location history data source:', response.data.source);
+        console.log('Raw location data:', response.data.locations);
+        
+        // Filter out any entries with invalid coordinates
+        const validLocations = response.data.locations.filter(loc => {
+          const lat = parseFloat(loc.latitude);
+          const lng = parseFloat(loc.longitude);
+          const isValid = !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0;
+          if (!isValid) {
+            console.warn('Filtering out invalid location:', loc);
+          }
+          return isValid;
+        });
+        
+        console.log(`Filtered to ${validLocations.length} valid locations`);
         
         // Convert coordinates to numbers and sort locations by timestamp
-        const processedLocations = response.data.locations.map(loc => ({
+        const processedLocations = validLocations.map(loc => ({
           ...loc,
           latitude: parseFloat(loc.latitude),
           longitude: parseFloat(loc.longitude),
@@ -104,16 +149,26 @@ const BusTracking = () => {
         );
         
         if (sortedLocations.length === 0) {
-          setError(`No location data found for ${selectedDate}`);
+          toast.info(`No valid location data found for ${selectedDate}`, {
+            position: "top-right",
+            autoClose: 3000
+          });
+          setLocationHistory([]);
         } else {
+          console.log(`Processed ${sortedLocations.length} location points`);
+          
           // Ensure we have at least 3 points for a proper path
-          if (sortedLocations.length < 3) {
+          let enhancedLocations = [...sortedLocations];
+          
+          if (sortedLocations.length < 3 && sortedLocations.length > 0) {
+            console.log('Adding intermediate points for better visualization');
+            
             // Create intermediate points if we have at least 2 points
             if (sortedLocations.length === 2) {
               const start = sortedLocations[0];
               const end = sortedLocations[1];
               
-              // Create a middle point (coordinates are already numbers from our processing above)
+              // Create a middle point
               const middlePoint = {
                 id: 'middle',
                 latitude: (start.latitude + end.latitude) / 2,
@@ -124,19 +179,39 @@ const BusTracking = () => {
               };
               
               // Insert the middle point
-              sortedLocations.splice(1, 0, middlePoint);
+              enhancedLocations.splice(1, 0, middlePoint);
+            } 
+            // If we only have one point, duplicate it with slight offset
+            else if (sortedLocations.length === 1) {
+              const point = sortedLocations[0];
+              
+              // Create a second point with slight offset
+              const offsetPoint = {
+                id: 'offset',
+                latitude: point.latitude + 0.0001, // Small offset
+                longitude: point.longitude + 0.0001,
+                timestamp: new Date(new Date(point.timestamp).getTime() + 60000).toISOString(), // 1 minute later
+                speed: point.speed,
+                userId: userId
+              };
+              
+              // Add the offset point
+              enhancedLocations.push(offsetPoint);
             }
           }
           
-          setLocationHistory(sortedLocations);
+          console.log('Final location history:', enhancedLocations);
+          setLocationHistory(enhancedLocations);
           
           // If data is from Firebase, show a success message
           if (response.data.source === 'firebase') {
-            toast.success(`Successfully fetched ${sortedLocations.length} location points from Firebase!`);
+            toast.success(`Successfully fetched ${enhancedLocations.length} location points from Firebase!`);
           }
         }
       } else {
+        console.error('API returned success: false');
         setError('Failed to fetch location history');
+        setLocationHistory([]);
       }
     } catch (err) {
       console.error('Error fetching location history:', err);

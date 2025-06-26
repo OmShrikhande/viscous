@@ -20,16 +20,32 @@ const ProfessionalDashboard = ({ children }) => {
   const fetchDashboardData = async () => {
     try {
       const token = localStorage.getItem('token');
-      if (!token) return;
+      if (!token) {
+        console.error('No token found, cannot fetch dashboard data');
+        setStatsLoading(false);
+        return;
+      }
 
       // Fetch stats
       try {
         const statsResponse = await axios.get('http://localhost:5000/api/dashboard/stats', {
           headers: { Authorization: `Bearer ${token}` }
         });
-        setDashboardStats(statsResponse.data.data);
+        
+        if (statsResponse.data && statsResponse.data.data) {
+          setDashboardStats(statsResponse.data.data);
+        } else {
+          console.error('Invalid stats response format:', statsResponse.data);
+        }
       } catch (err) {
-        console.log('Dashboard stats not available');
+        console.error('Error fetching dashboard stats:', err);
+        
+        // If we get a 401 error, redirect to login
+        if (err.response && err.response.status === 401) {
+          localStorage.removeItem('token');
+          navigate('/');
+          return;
+        }
       }
 
       // Fetch activities
@@ -37,14 +53,20 @@ const ProfessionalDashboard = ({ children }) => {
         const activitiesResponse = await axios.get('http://localhost:5000/api/dashboard/recent-activities', {
           headers: { Authorization: `Bearer ${token}` }
         });
-        setRecentActivities(activitiesResponse.data.activities);
+        
+        if (activitiesResponse.data && activitiesResponse.data.activities) {
+          setRecentActivities(activitiesResponse.data.activities);
+        } else {
+          console.error('Invalid activities response format:', activitiesResponse.data);
+        }
       } catch (err) {
-        console.log('Recent activities not available');
+        console.error('Error fetching recent activities:', err);
+        // Don't redirect for this error as it's not critical
       }
 
       setStatsLoading(false);
     } catch (err) {
-      console.error('Error fetching dashboard data:', err);
+      console.error('Error in fetchDashboardData:', err);
       setStatsLoading(false);
     }
   };
@@ -63,17 +85,28 @@ const ProfessionalDashboard = ({ children }) => {
   const fetchAdminInfo = async () => {
     try {
       const token = localStorage.getItem('token');
-      if (!token) return;
+      if (!token) {
+        console.error('No token found, cannot fetch admin info');
+        return;
+      }
 
       const response = await axios.get('http://localhost:5000/api/admin/profile', {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      if (response.data.success) {
+      if (response.data && response.data.success) {
         setAdminInfo(response.data.admin);
+      } else {
+        console.error('Invalid response format for admin profile:', response.data);
       }
     } catch (err) {
-      console.log('Admin info not available');
+      console.error('Error fetching admin info:', err);
+      
+      // If we get a 401 error, redirect to login
+      if (err.response && err.response.status === 401) {
+        localStorage.removeItem('token');
+        navigate('/');
+      }
     }
   };
 
@@ -82,14 +115,25 @@ const ProfessionalDashboard = ({ children }) => {
       const token = localStorage.getItem('token');
       if (token) {
         // Record logout time
-        await axios.post('http://localhost:5000/api/admin/logout', {}, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        try {
+          await axios.post('http://localhost:5000/api/admin/logout', {}, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+        } catch (err) {
+          console.error('Error recording logout:', err);
+          // Continue with logout even if the API call fails
+        }
       }
     } catch (err) {
-      console.log('Error recording logout:', err);
+      console.error('Error in handleLogout:', err);
     } finally {
+      // Clear token from localStorage
       localStorage.removeItem('token');
+      
+      // Clear Authorization header
+      delete axios.defaults.headers.common['Authorization'];
+      
+      // Navigate to login page
       navigate('/');
     }
   };

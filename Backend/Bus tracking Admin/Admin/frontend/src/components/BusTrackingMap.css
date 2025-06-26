@@ -291,7 +291,24 @@
 .flow-line {
   stroke-dasharray: 15, 15;
   animation: flow 1.5s linear infinite;
-  filter: drop-shadow(0 0 3px rgba(59, 130, 246, 0.5));
+  filter: drop-shadow(0 0 5px rgba(59, 130, 246, 0.8));
+}
+
+/* Enhanced visibility for map elements */
+.leaflet-marker-icon {
+  filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.5));
+}
+
+.leaflet-marker-icon:hover {
+  z-index: 1000 !important;
+  transform: scale(1.1);
+  transition: transform 0.2s ease;
+}
+
+/* Make circle markers more visible */
+.leaflet-interactive {
+  stroke-width: 3;
+  filter: drop-shadow(0 0 5px rgba(59, 130, 246, 0.7));
 }
 
 /* Glow effect for map elements */
@@ -355,4 +372,20 @@
 
 .leaflet-control-attribution a {
   color: rgba(139, 92, 246, 0.9) !important;
+}
+
+/* Animation for notifications */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out forwards;
 }

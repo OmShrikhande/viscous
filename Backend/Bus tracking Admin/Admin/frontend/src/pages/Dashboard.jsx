@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import Login from './Login';  
 import { useNavigate } from 'react-router-dom';
 import UserData from '../components/dashboard/userdata';
 import AnimatedParticlesBackground from '../components/dashboard/AnimatedParticlesBackground';
@@ -32,6 +31,8 @@ const Dashboard = () => {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
+      console.error('No token found, redirecting to login');
+      setAuthorized(false);
       navigate('/'); // Not logged in
       return;
     }
@@ -39,22 +40,45 @@ const Dashboard = () => {
     // Set authorized and fetch users
     setAuthorized(true);
     fetchUsers(token);
-  }, []);
+  }, [navigate]);
 
   // Fetch all users
   const fetchUsers = async (token) => {
     try {
       setLoading(true);
+      
+      if (!token) {
+        console.error('No token provided to fetchUsers');
+        setError('Authentication error');
+        setLoading(false);
+        navigate('/');
+        return;
+      }
+      
       const response = await axios.get('http://localhost:5000/api/admin/users', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setUsers(response.data.users);
+      
+      if (response.data && response.data.users) {
+        setUsers(response.data.users);
+      } else {
+        console.error('Invalid response format:', response.data);
+        setError('Invalid response from server');
+      }
+      
       setLoading(false);
     } catch (err) {
       console.error('Error fetching users:', err);
       setError('Failed to fetch users');
-      localStorage.removeItem('token'); // Logout user on failure
-      navigate('/Login');
+      
+      // If we get a 401 error, redirect to login
+      if (err.response && err.response.status === 401) {
+        console.error('Authentication error, redirecting to login');
+        localStorage.removeItem('token'); // Logout user on authentication failure
+        navigate('/');
+      }
+      
+      setLoading(false);
     }
   };
 

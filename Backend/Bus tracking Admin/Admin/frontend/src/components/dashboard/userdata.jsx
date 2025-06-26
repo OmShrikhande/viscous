@@ -17,12 +17,26 @@ const UserData = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
+      
+      if (!token) {
+        console.error('No token found, cannot fetch users');
+        setLoading(false);
+        return;
+      }
+      
       const response = await axios.get('http://localhost:5000/api/admin/users', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setUsers(response.data.users);
+      
+      if (response.data && response.data.users) {
+        setUsers(response.data.users);
+      } else {
+        console.error('Invalid response format:', response.data);
+      }
+      
       setLoading(false);
     } catch (err) {
+      console.error('Error fetching users:', err);
       setLoading(false);
     }
   };

@@ -52,10 +52,25 @@ const Login = () => {
     e.preventDefault();
     try {
       const res = await axios.post('http://localhost:5000/api/admin/login', { email, password });
+      
+      // Make sure we're getting a token back
+      if (!res.data.token) {
+        toast.error('No authentication token received');
+        return;
+      }
+      
+      // Store the token in localStorage
       localStorage.setItem('token', res.data.token);
+      
+      // Set default Authorization header for all future axios requests
+      axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
+      
       toast.success('Login successful!');
+      
+      // Navigate to dashboard after a short delay
       setTimeout(() => navigate('/dashboard'), 1000);
     } catch (err) {
+      console.error('Login error:', err);
       toast.error(err.response?.data?.message || 'Login failed');
     }
   };

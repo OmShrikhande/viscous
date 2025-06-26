@@ -43,8 +43,9 @@ exports.protect = async (req, res, next) => {
     }
 
     try {
-      // Verify token
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      // Verify token with a fallback secret for development
+      const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-for-development';
+      const decoded = jwt.verify(token, JWT_SECRET);
       console.log("token", token);
       console.log("decoded", decoded);
       console.log("decoded id", decoded.id);

@@ -20,25 +20,13 @@ exports.registerAdmin = async (req, res) => {
 // Mock admin users for development/demo
 const mockAdmins = [
   {
-    id: "admin-1",
-    email: "admin@example.com",
-    username: "admin",
-    password: "$2a$10$rrCvVFoAVgrXepXwGLcxA.VVu2VJvHXAyNcYzFpQHU7FXwR9K0Wm6" // "admin123"
-  },
-  {
     id: "kuldeep-user-id",
     email: "kuldeept.cse22@sbjit.edu.in",
     username: "kuldeep",
     // This is the hashed version of "123456789" to match createAdminUser.js
     password: "$2a$10$3Iy9sPf.UGBToA8TZqyXsOiPRjQn9.4svpZFz1RxHrwLULdOiXMp2" 
   },
-  {
-    id: "demo-user-id",
-    email: "demo@example.com",
-    username: "demo",
-    // Plain text: "admin123"
-    password: "$2a$10$rrCvVFoAVgrXepXwGLcxA.VVu2VJvHXAyNcYzFpQHU7FXwR9K0Wm6" 
-  }
+  
 ];
 
 exports.loginAdmin = async (req, res) => {
@@ -59,9 +47,6 @@ exports.loginAdmin = async (req, res) => {
       if (normalizedEmail === "kuldeept.cse22@sbjit.edu.in" && password === "123456789") {
         console.log("Development mode: Direct password match for kuldeept.cse22@sbjit.edu.in");
         isMatch = true;
-      } else if (normalizedEmail === "demo@example.com" && password === "admin123") {
-        console.log("Development mode: Direct password match for demo@example.com");
-        isMatch = true;
       } else {
         // Verify password against mock admin using bcrypt
         isMatch = await bcrypt.compare(password, mockAdmin.password);
@@ -75,8 +60,9 @@ exports.loginAdmin = async (req, res) => {
         });
       }
       
-      // Generate token for mock admin
-      const token = jwt.sign({ id: mockAdmin.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+      // Generate token for mock admin using a hardcoded secret for development
+      const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-for-development';
+      const token = jwt.sign({ id: mockAdmin.id }, JWT_SECRET, { expiresIn: '7d' });
       
       return res.json({
         success: true,
@@ -135,7 +121,8 @@ exports.loginAdmin = async (req, res) => {
           // Continue with login even if saving history fails
         }
         
-        const token = jwt.sign({ id: admin._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+        const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-for-development';
+        const token = jwt.sign({ id: admin._id }, JWT_SECRET, { expiresIn: '7d' });
         
         return res.json({
           success: true,
@@ -158,7 +145,8 @@ exports.loginAdmin = async (req, res) => {
     
     // Special case for the specific user in the error message
     if (normalizedEmail === "kuldeept.cse22@sbjit.edu.in") {
-      const demoToken = jwt.sign({ id: "kuldeep-user-id" }, process.env.JWT_SECRET, { expiresIn: '7d' });
+      const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-for-development';
+      const demoToken = jwt.sign({ id: "kuldeep-user-id" }, JWT_SECRET, { expiresIn: '7d' });
       return res.json({
         success: true,
         token: demoToken,
@@ -174,7 +162,7 @@ exports.loginAdmin = async (req, res) => {
     // For any other email not in mock data
     return res.status(400).json({ 
       success: false, 
-      message: 'Invalid credentials. Try using demo@example.com with password admin123' 
+      message: 'Invalid credentials. Try using kuldeept.cse22@sbjit.edu.in with password 123456789' 
     });
     
   } catch (err) {
@@ -182,7 +170,7 @@ exports.loginAdmin = async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: err.message,
-      message: 'Server error. Try using demo@example.com with password admin123'
+      message: 'Server error. Try using kuldeept.cse22@sbjit.edu.in with password 123456789'
     });
   }
 };
