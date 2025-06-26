@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { format } from 'date-fns';
@@ -7,6 +7,8 @@ import BusTrackingMap from '../components/BusTrackingMap';
 import FuturisticBackground from '../components/backgrounds/FuturisticBackground';
 import GlassCard from '../components/ui/GlassCard';
 import { FaBus, FaCalendarAlt, FaHistory, FaMapMarkedAlt, FaSync } from 'react-icons/fa';
+import { realtimeDb } from '../config/firebase';
+import { ref, onValue, off, get } from 'firebase/database';
 
 const BusTracking = () => {
   const navigate = useNavigate();
@@ -16,90 +18,237 @@ const BusTracking = () => {
   const [locationHistory, setLocationHistory] = useState([]);
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [showMap, setShowMap] = useState(true); // Always show the map
-  const [userId, setUserId] = useState('bus-1'); // Default bus ID
-
-  // Check authentication and fetch initial data
+  // Fixed bus ID - no need for user to change it
+  const busId = 'bus-1'; // Hardcoded bus ID
+  
+  // Refs for Firebase listeners and data caching
+  const locationListenerRef = useRef(null);
+  const lastLocationRef = useRef(null);
+  const lastUpdateTimeRef = useRef(0);
+  const noChangeCountRef = useRef(0);
+  const inactivityTimerRef = useRef(null);
+  
+  // Check authentication and setup Firebase listeners
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
       navigate('/');
     } else {
-      // Fetch data on component mount
-      fetchCurrentLocation();
+      // Setup Firebase listener for current location
+      setupLocationListener(busId);
+      // Fetch historical data
       fetchLocationHistory();
     }
+    
+    // Cleanup function to remove listeners when component unmounts
+    return () => {
+      cleanupLocationListener();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
-  // Fetch current location
-  const fetchCurrentLocation = async () => {
+  // Setup Firebase real-time listener for current location
+  const setupLocationListener = (busId) => {
+    if (!busId) return;
+    
     setLoading(true);
     setError(null);
     
     try {
-      const token = localStorage.getItem('token');
-      console.log(`Fetching current location for bus ${userId}`);
+      console.log(`Setting up real-time listener for bus ${busId}`);
       
-      const response = await axios.get(`http://localhost:5000/api/bus-location/${userId}`, {
+      // Reference to the current location in Firebase
+      // Use the direct path to the bus location
+      const locationRef = ref(realtimeDb, `buses/${busId}/currentLocation`);
+      
+      // Remove any existing listener
+      if (locationListenerRef.current) {
+        off(locationListenerRef.current);
+      }
+      
+      // Set up the new listener
+      locationListenerRef.current = locationRef;
+      
+      // Listen for changes - always update immediately on first data
+      onValue(locationRef, (snapshot) => {
+        const locationData = snapshot.val();
+        console.log('Firebase real-time update received:', locationData);
+        
+        if (locationData) {
+          // Always update on first data reception
+          const isFirstUpdate = !lastLocationRef.current;
+          
+          // Process the location data
+          processLocationData(locationData, isFirstUpdate);
+          setLoading(false);
+        } else {
+          console.log('No location data available in Firebase');
+          setCurrentLocation(null);
+          setLoading(false);
+          
+          // Fallback to REST API if no data in Firebase
+          fallbackToRestApi(busId);
+        }
+      }, (error) => {
+        console.error('Firebase listener error:', error);
+        setError('Error connecting to real-time database: ' + error.message);
+        setLoading(false);
+        
+        // Fallback to REST API if Firebase listener fails
+        fallbackToRestApi(busId);
+      });
+      
+    } catch (err) {
+      console.error('Error setting up Firebase listener:', err);
+      setError('Error setting up real-time tracking: ' + err.message);
+      setLoading(false);
+      
+      // Fallback to REST API
+      fallbackToRestApi(busId);
+    }
+  };
+  
+  // Clean up Firebase listener
+  const cleanupLocationListener = () => {
+    if (locationListenerRef.current) {
+      console.log('Removing Firebase listener');
+      off(locationListenerRef.current);
+      locationListenerRef.current = null;
+    }
+    
+    // Clear any inactivity timer
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+      inactivityTimerRef.current = null;
+    }
+  };
+  
+  // Process location data with optimization logic
+  const processLocationData = (locationData, isFirstUpdate = false) => {
+    if (!locationData) {
+      console.log('No location data available');
+      setCurrentLocation(null);
+      return;
+    }
+    
+    // Ensure coordinates are numbers and valid
+    const lat = parseFloat(locationData.latitude);
+    const lng = parseFloat(locationData.longitude);
+    
+    // Check if coordinates are valid
+    if (isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) {
+      console.warn('Invalid coordinates in location data:', locationData);
+      setCurrentLocation(null);
+      return;
+    }
+    
+    const processedLocation = {
+      ...locationData,
+      latitude: lat,
+      longitude: lng,
+      speed: parseFloat(locationData.speed || 0),
+      timestamp: locationData.timestamp || new Date().toISOString()
+    };
+    
+    // Check if the location has actually changed
+    const hasChanged = hasLocationChanged(processedLocation, lastLocationRef.current);
+    
+    // Get current time
+    const now = Date.now();
+    const timeSinceLastUpdate = now - lastUpdateTimeRef.current;
+    
+    // Update UI if:
+    // 1. It's the first update after component mount
+    // 2. Location has changed, or
+    // 3. It's been more than 30 seconds since the last update
+    if (isFirstUpdate || hasChanged || timeSinceLastUpdate > 30000) {
+      console.log('Updating location display:', processedLocation);
+      setCurrentLocation(processedLocation);
+      lastLocationRef.current = processedLocation;
+      lastUpdateTimeRef.current = now;
+      noChangeCountRef.current = 0;
+      
+      // If location has changed, show a success message (but not too frequently)
+      if ((hasChanged || isFirstUpdate) && timeSinceLastUpdate > 5000) {
+        setError(null);
+        toast.success('Real-time location updated from Firebase!', {
+          position: "top-right",
+          autoClose: 2000
+        });
+      }
+    } else {
+      // Location hasn't changed
+      noChangeCountRef.current++;
+      console.log(`Location unchanged (${noChangeCountRef.current} consecutive times)`);
+      
+      // If location hasn't changed for a while, reduce update frequency
+      if (noChangeCountRef.current >= 10) {
+        // After 10 consecutive unchanged updates, pause the listener for 10 minutes
+        if (!inactivityTimerRef.current) {
+          console.log('Location unchanged for extended period, pausing real-time updates for 10 minutes');
+          toast.info('Bus appears stationary. Reducing update frequency to save resources.', {
+            position: "top-right",
+            autoClose: 5000
+          });
+          
+          // Temporarily remove the listener
+          if (locationListenerRef.current) {
+            off(locationListenerRef.current);
+          }
+          
+          // Set a timer to restore the listener after 10 minutes
+          inactivityTimerRef.current = setTimeout(() => {
+            console.log('Resuming real-time updates after inactivity period');
+            setupLocationListener(busId);
+            inactivityTimerRef.current = null;
+            noChangeCountRef.current = 0;
+          }, 10 * 60 * 1000); // 10 minutes
+        }
+      }
+    }
+  };
+  
+  // Check if location has meaningfully changed
+  const hasLocationChanged = (newLocation, oldLocation) => {
+    if (!oldLocation) return true;
+    
+    // Calculate distance between points (simple approximation)
+    const latDiff = Math.abs(newLocation.latitude - oldLocation.latitude);
+    const lngDiff = Math.abs(newLocation.longitude - oldLocation.longitude);
+    
+    // Consider it changed if coordinates differ by more than a small threshold
+    // This helps filter out minor GPS fluctuations
+    const coordinatesChanged = latDiff > 0.0001 || lngDiff > 0.0001;
+    
+    // Also check if speed has changed significantly
+    const speedChanged = Math.abs(newLocation.speed - oldLocation.speed) > 3; // 3 km/h threshold
+    
+    return coordinatesChanged || speedChanged;
+  };
+  
+  // Fallback to REST API if Firebase fails
+  const fallbackToRestApi = async (busId) => {
+    console.log('Falling back to REST API for location data');
+    
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      
+      const response = await axios.get(`http://localhost:5000/api/bus-location/${busId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      if (response.data.success) {
-        console.log('Current location data source:', response.data.source);
-        console.log('Raw current location data:', response.data.location);
-        
-        // Ensure coordinates are numbers and valid
-        const location = response.data.location;
-        if (location) {
-          const lat = parseFloat(location.latitude);
-          const lng = parseFloat(location.longitude);
-          
-          // Check if coordinates are valid
-          if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
-            const processedLocation = {
-              ...location,
-              latitude: lat,
-              longitude: lng,
-              speed: parseFloat(location.speed || 0)
-            };
-            
-            console.log('Processed current location:', processedLocation);
-            setCurrentLocation(processedLocation);
-            
-            // If data is from Firebase, show a success message
-            if (response.data.source === 'firebase') {
-              setError(null);
-              toast.success('Successfully fetched real-time data from Firebase!');
-            }
-          } else {
-            console.warn('Invalid coordinates in current location:', location);
-            setCurrentLocation(null);
-            toast.info('Current location has invalid coordinates', {
-              position: "top-right",
-              autoClose: 3000
-            });
-          }
-        } else {
-          console.log('No current location data available');
-          setCurrentLocation(null);
-          toast.info('No current location data available', {
-            position: "top-right",
-            autoClose: 3000
-          });
-        }
+      if (response.data.success && response.data.location) {
+        console.log('REST API fallback successful:', response.data.location);
+        // Always update on fallback (treat as first update)
+        processLocationData(response.data.location, true);
       } else {
-        console.error('API returned success: false');
-        toast.error('Failed to fetch current location', {
-          position: "top-right",
-          autoClose: 3000
-        });
+        console.error('REST API returned no data');
         setCurrentLocation(null);
       }
     } catch (err) {
-      console.error('Error fetching current location:', err);
-      setError(err.response?.data?.message || 'Error fetching current location');
-      
-      // No fallback data, just set to null
+      console.error('Error in REST API fallback:', err);
+      setError('Could not retrieve location data: ' + err.message);
       setCurrentLocation(null);
     } finally {
       setLoading(false);
@@ -112,133 +261,214 @@ const BusTracking = () => {
     setError(null);
     
     try {
-      const token = localStorage.getItem('token');
-      console.log(`Fetching location history for bus ${userId} on date ${selectedDate}`);
+      console.log(`Fetching location history for bus ${busId} on date ${selectedDate}`);
       
-      const response = await axios.get(`http://localhost:5000/api/bus-location/${userId}/history?date=${selectedDate}`, {
+      // Try to fetch directly from Firebase first
+      const historyFromFirebase = await fetchHistoryFromFirebase(busId, selectedDate);
+      
+      if (historyFromFirebase && historyFromFirebase.length > 0) {
+        // Process and use the Firebase data
+        processHistoryData(historyFromFirebase, 'firebase');
+      } else {
+        // Fall back to REST API if Firebase doesn't have the data
+        await fetchHistoryFromApi();
+      }
+    } catch (err) {
+      console.error('Error fetching location history:', err);
+      setError('Error fetching location history: ' + err.message);
+      setLocationHistory([]);
+      
+      // Try the API as a fallback
+      try {
+        await fetchHistoryFromApi();
+      } catch (apiErr) {
+        console.error('API fallback also failed:', apiErr);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Fetch history directly from Firebase
+  const fetchHistoryFromFirebase = async (busId, date) => {
+    try {
+      // Reference to the history data in Firebase
+      // Assuming a structure like: buses/{busId}/history/{date}
+      const historyRef = ref(realtimeDb, `buses/${busId}/history/${date.replace(/-/g, '')}`);
+      
+      // Get the data once (not a real-time listener for historical data)
+      const snapshot = await get(historyRef);
+      
+      if (snapshot.exists()) {
+        console.log('History data found in Firebase');
+        
+        // Convert the Firebase object to an array
+        const historyData = snapshot.val();
+        const historyArray = [];
+        
+        // If it's an object with timestamp keys
+        if (typeof historyData === 'object' && !Array.isArray(historyData)) {
+          Object.keys(historyData).forEach(key => {
+            historyArray.push({
+              ...historyData[key],
+              timestamp: historyData[key].timestamp || key // Use the key as timestamp if not provided
+            });
+          });
+        } else if (Array.isArray(historyData)) {
+          // If it's already an array
+          return historyData;
+        }
+        
+        return historyArray;
+      } else {
+        console.log('No history data found in Firebase for this date');
+        return null;
+      }
+    } catch (err) {
+      console.error('Error fetching history from Firebase:', err);
+      return null;
+    }
+  };
+  
+  // Fetch history from REST API
+  const fetchHistoryFromApi = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      const response = await axios.get(`http://localhost:5000/api/bus-location/${busId}/history?date=${selectedDate}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
       if (response.data.success) {
         console.log('Location history data source:', response.data.source);
-        console.log('Raw location data:', response.data.locations);
+        console.log('Raw location data from API:', response.data.locations);
         
-        // Filter out any entries with invalid coordinates
-        const validLocations = response.data.locations.filter(loc => {
-          const lat = parseFloat(loc.latitude);
-          const lng = parseFloat(loc.longitude);
-          const isValid = !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0;
-          if (!isValid) {
-            console.warn('Filtering out invalid location:', loc);
-          }
-          return isValid;
-        });
-        
-        console.log(`Filtered to ${validLocations.length} valid locations`);
-        
-        // Convert coordinates to numbers and sort locations by timestamp
-        const processedLocations = validLocations.map(loc => ({
-          ...loc,
-          latitude: parseFloat(loc.latitude),
-          longitude: parseFloat(loc.longitude),
-          speed: parseFloat(loc.speed || 0)
-        }));
-        
-        const sortedLocations = processedLocations.sort((a, b) => 
-          new Date(a.timestamp) - new Date(b.timestamp)
-        );
-        
-        if (sortedLocations.length === 0) {
-          toast.info(`No valid location data found for ${selectedDate}`, {
-            position: "top-right",
-            autoClose: 3000
-          });
-          setLocationHistory([]);
-        } else {
-          console.log(`Processed ${sortedLocations.length} location points`);
-          
-          // Ensure we have at least 3 points for a proper path
-          let enhancedLocations = [...sortedLocations];
-          
-          if (sortedLocations.length < 3 && sortedLocations.length > 0) {
-            console.log('Adding intermediate points for better visualization');
-            
-            // Create intermediate points if we have at least 2 points
-            if (sortedLocations.length === 2) {
-              const start = sortedLocations[0];
-              const end = sortedLocations[1];
-              
-              // Create a middle point
-              const middlePoint = {
-                id: 'middle',
-                latitude: (start.latitude + end.latitude) / 2,
-                longitude: (start.longitude + end.longitude) / 2,
-                timestamp: new Date((new Date(start.timestamp).getTime() + new Date(end.timestamp).getTime()) / 2).toISOString(),
-                speed: (start.speed + end.speed) / 2,
-                userId: userId
-              };
-              
-              // Insert the middle point
-              enhancedLocations.splice(1, 0, middlePoint);
-            } 
-            // If we only have one point, duplicate it with slight offset
-            else if (sortedLocations.length === 1) {
-              const point = sortedLocations[0];
-              
-              // Create a second point with slight offset
-              const offsetPoint = {
-                id: 'offset',
-                latitude: point.latitude + 0.0001, // Small offset
-                longitude: point.longitude + 0.0001,
-                timestamp: new Date(new Date(point.timestamp).getTime() + 60000).toISOString(), // 1 minute later
-                speed: point.speed,
-                userId: userId
-              };
-              
-              // Add the offset point
-              enhancedLocations.push(offsetPoint);
-            }
-          }
-          
-          console.log('Final location history:', enhancedLocations);
-          setLocationHistory(enhancedLocations);
-          
-          // If data is from Firebase, show a success message
-          if (response.data.source === 'firebase') {
-            toast.success(`Successfully fetched ${enhancedLocations.length} location points from Firebase!`);
-          }
-        }
+        // Process the API response data
+        processHistoryData(response.data.locations, response.data.source);
       } else {
         console.error('API returned success: false');
         setError('Failed to fetch location history');
         setLocationHistory([]);
       }
     } catch (err) {
-      console.error('Error fetching location history:', err);
-      setError(err.response?.data?.message || 'Error fetching location history');
-      
-      // No fallback data, just set to empty array
+      console.error('Error fetching history from API:', err);
+      throw err; // Re-throw to be handled by the caller
+    }
+  };
+  
+  // Process history data from any source
+  const processHistoryData = (locationsData, source) => {
+    if (!locationsData || locationsData.length === 0) {
+      toast.info(`No location data found for ${selectedDate}`, {
+        position: "top-right",
+        autoClose: 3000
+      });
       setLocationHistory([]);
-      
-      // Log more details about the error
-      if (err.response) {
-        console.error('Error response data:', err.response.data);
-        console.error('Error response status:', err.response.status);
-      } else if (err.request) {
-        console.error('No response received:', err.request);
-      } else {
-        console.error('Error message:', err.message);
+      return;
+    }
+    
+    // Filter out any entries with invalid coordinates
+    const validLocations = locationsData.filter(loc => {
+      const lat = parseFloat(loc.latitude);
+      const lng = parseFloat(loc.longitude);
+      const isValid = !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0;
+      if (!isValid) {
+        console.warn('Filtering out invalid location:', loc);
       }
-    } finally {
-      setLoading(false);
+      return isValid;
+    });
+    
+    console.log(`Filtered to ${validLocations.length} valid locations`);
+    
+    if (validLocations.length === 0) {
+      toast.info(`No valid location data found for ${selectedDate}`, {
+        position: "top-right",
+        autoClose: 3000
+      });
+      setLocationHistory([]);
+      return;
+    }
+    
+    // Convert coordinates to numbers and sort locations by timestamp
+    const processedLocations = validLocations.map(loc => ({
+      ...loc,
+      latitude: parseFloat(loc.latitude),
+      longitude: parseFloat(loc.longitude),
+      speed: parseFloat(loc.speed || 0),
+      timestamp: loc.timestamp || new Date().toISOString()
+    }));
+    
+    const sortedLocations = processedLocations.sort((a, b) => 
+      new Date(a.timestamp) - new Date(b.timestamp)
+    );
+    
+    // Ensure we have at least 3 points for a proper path
+    let enhancedLocations = [...sortedLocations];
+    
+    if (sortedLocations.length < 3 && sortedLocations.length > 0) {
+      console.log('Adding intermediate points for better visualization');
+      
+      // Create intermediate points if we have at least 2 points
+      if (sortedLocations.length === 2) {
+        const start = sortedLocations[0];
+        const end = sortedLocations[1];
+        
+        // Create a middle point
+        const middlePoint = {
+          id: 'middle',
+          latitude: (start.latitude + end.latitude) / 2,
+          longitude: (start.longitude + end.longitude) / 2,
+          timestamp: new Date((new Date(start.timestamp).getTime() + new Date(end.timestamp).getTime()) / 2).toISOString(),
+          speed: (start.speed + end.speed) / 2,
+          userId: busId
+        };
+        
+        // Insert the middle point
+        enhancedLocations.splice(1, 0, middlePoint);
+      } 
+      // If we only have one point, duplicate it with slight offset
+      else if (sortedLocations.length === 1) {
+        const point = sortedLocations[0];
+        
+        // Create a second point with slight offset
+        const offsetPoint = {
+          id: 'offset',
+          latitude: point.latitude + 0.0001, // Small offset
+          longitude: point.longitude + 0.0001,
+          timestamp: new Date(new Date(point.timestamp).getTime() + 60000).toISOString(), // 1 minute later
+          speed: point.speed,
+          userId: busId
+        };
+        
+        // Add the offset point
+        enhancedLocations.push(offsetPoint);
+      }
+    }
+    
+    console.log('Final location history:', enhancedLocations);
+    setLocationHistory(enhancedLocations);
+    
+    // Show a success message based on the data source
+    if (source === 'firebase') {
+      toast.success(`Successfully fetched ${enhancedLocations.length} location points from Firebase!`);
+    } else {
+      toast.info(`Loaded ${enhancedLocations.length} location points from the server`);
     }
   };
 
-  // Handle view location button click - just fetch the data
+  // Handle refresh button click
   const handleViewMap = () => {
-    // Always fetch from API (which will now try Firebase first)
-    fetchCurrentLocation();
+    // For current location, reset the listener
+    cleanupLocationListener();
+    setupLocationListener(busId);
+    
+    // For history, fetch the data for the selected date
     fetchLocationHistory();
+    
+    toast.info('Refreshing location data...', {
+      position: "top-right",
+      autoClose: 2000
+    });
   };
 
   // Handle date change and automatically fetch new data
@@ -252,6 +482,8 @@ const BusTracking = () => {
 
   // Handle back to dashboard
   const handleBackToDashboard = () => {
+    // Clean up listeners before navigating away
+    cleanupLocationListener();
     navigate('/dashboard');
   };
 
@@ -289,30 +521,16 @@ const BusTracking = () => {
           </div>
           
           <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <div>
-                <label className="block text-sm font-medium text-blue-200 mb-2 flex items-center">
-                  <FaBus className="mr-2" /> Bus ID
-                </label>
-                <input
-                  type="text"
-                  value={userId}
-                  onChange={(e) => setUserId(e.target.value)}
-                  className="w-full px-3 py-2 bg-white/10 border border-white/30 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 text-white placeholder-blue-200/70"
-                  placeholder="Enter bus ID"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-blue-200 mb-2 flex items-center">
-                  <FaCalendarAlt className="mr-2" /> Date
-                </label>
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={handleDateChange}
-                  className="w-full px-3 py-2 bg-white/10 border border-white/30 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 text-white"
-                />
-              </div>
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-blue-200 mb-2 flex items-center">
+                <FaCalendarAlt className="mr-2" /> Select Date for History
+              </label>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={handleDateChange}
+                className="w-full px-3 py-2 bg-white/10 border border-white/30 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 text-white"
+              />
             </div>
             
             <button 
@@ -330,7 +548,7 @@ const BusTracking = () => {
                 </span>
               ) : (
                 <span className="flex items-center">
-                  <FaSync className="mr-2" /> Update Location Data
+                  <FaSync className="mr-2" /> Refresh Real-time Location
                 </span>
               )}
             </button>
