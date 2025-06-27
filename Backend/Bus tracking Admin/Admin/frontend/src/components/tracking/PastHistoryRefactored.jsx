@@ -1,11 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import 'leaflet-polylinedecorator'; // Import for direction arrows
 import 'leaflet/dist/leaflet.css';
+import { useEffect, useRef, useState } from 'react';
+import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
 
-import axios from 'axios';
+import { collection, getDocs, query } from 'firebase/firestore';
 import { firestoreDb } from '../../config/firebase';
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 
 // Fix for default marker icons in Leaflet with React
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -59,16 +59,22 @@ const MapController = ({ mapRef, zoomLevel }) => {
   return null;
 };
 
-// RouteHighlighter Component - Draws routes between points
+// RouteHighlighter Component - Draws routes between points with direction arrows
 const RouteHighlighter = ({ locationHistory }) => {
   const map = useMap();
   const routeLayerRef = useRef(null);
+  const arrowLayerRef = useRef(null);
   
   useEffect(() => {
-    // Clear previous route if it exists
+    // Clear previous route and arrows if they exist
     if (routeLayerRef.current) {
       map.removeLayer(routeLayerRef.current);
       routeLayerRef.current = null;
+    }
+    
+    if (arrowLayerRef.current) {
+      map.removeLayer(arrowLayerRef.current);
+      arrowLayerRef.current = null;
     }
     
     // Only proceed if we have at least 2 points
@@ -136,14 +142,54 @@ const RouteHighlighter = ({ locationHistory }) => {
         // Store reference to remove it later if needed
         routeLayerRef.current = route;
         
+        // Add direction arrows to the route
+        // Extract the coordinates from the GeoJSON
+        let pathCoordinates = [];
+        if (data.features && data.features.length > 0) {
+          // Get the geometry from the first feature
+          const geometry = data.features[0].geometry;
+          
+          if (geometry.type === 'LineString') {
+            // LineString has coordinates as [[lng, lat], [lng, lat], ...]
+            // Convert to Leaflet format [[lat, lng], [lat, lng], ...]
+            pathCoordinates = geometry.coordinates.map(coord => [coord[1], coord[0]]);
+          }
+        }
+        
+        // Create a polyline for the arrows if we have coordinates
+        if (pathCoordinates.length > 0) {
+          // Create a polyline decorator with arrow symbols
+          const arrowDecorator = L.polylineDecorator(pathCoordinates, {
+            patterns: [
+              {
+                offset: '5%', // Start a bit after the beginning
+                repeat: '10%', // Place arrows at regular intervals
+                symbol: L.Symbol.arrowHead({
+                  pixelSize: 15, // Size of the arrow
+                  polygon: true,
+                  pathOptions: {
+                    fillOpacity: 1,
+                    weight: 0,
+                    color: '#FF00FF', // White arrows
+                    fillColor: '#FF00FF'
+                  }
+                })
+              }
+            ]
+          }).addTo(map);
+          
+          arrowLayerRef.current = arrowDecorator;
+        }
+        
         // Fit map bounds to show the entire route
         map.fitBounds(route.getBounds());
       } catch (error) {
         console.error('Error drawing route:', error);
         
         // Fallback: Draw a simple polyline if API fails
+        const latLngPoints = locationHistory.map(loc => [loc.latitude, loc.longitude]);
         const polyline = L.polyline(
-          locationHistory.map(loc => [loc.latitude, loc.longitude]),
+          latLngPoints,
           {
             color: '#4F46E5',
             weight: 4,
@@ -154,6 +200,29 @@ const RouteHighlighter = ({ locationHistory }) => {
         ).addTo(map);
         
         routeLayerRef.current = polyline;
+        
+        // Add direction arrows to the fallback polyline
+        const arrowDecorator = L.polylineDecorator(latLngPoints, {
+          patterns: [
+            {
+              offset: '5%', // Start a bit after the beginning
+              repeat: '10%', // Place arrows at regular intervals
+              symbol: L.Symbol.arrowHead({
+                pixelSize: 15, // Size of the arrow
+                polygon: true,
+                pathOptions: {
+                  fillOpacity: 0.8,
+                  weight: 0,
+                  color: '#FFFFFF', // White arrows
+                  fillColor: '#FFFFFF'
+                }
+              })
+            }
+          ]
+        }).addTo(map);
+        
+        arrowLayerRef.current = arrowDecorator;
+        
         map.fitBounds(polyline.getBounds());
       }
     };
@@ -164,6 +233,9 @@ const RouteHighlighter = ({ locationHistory }) => {
     return () => {
       if (routeLayerRef.current) {
         map.removeLayer(routeLayerRef.current);
+      }
+      if (arrowLayerRef.current) {
+        map.removeLayer(arrowLayerRef.current);
       }
     };
   }, [map, locationHistory]);
