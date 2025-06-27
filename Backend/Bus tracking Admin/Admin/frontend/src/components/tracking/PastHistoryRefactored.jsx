@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+
 import axios from 'axios';
 import { firestoreDb } from '../../config/firebase';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import RoadHighlighter from './RoadHighlighter';
 
 // Fix for default marker icons in Leaflet with React
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -306,7 +308,7 @@ const HistoryResultsTable = ({ historyResults, selectedDate, mapRef, zoomLevel, 
 // RouteMap Component
 const RouteMap = ({ 
   mapPosition, zoomLevel, mapRef, locationHistory, routePolyline, isLoading, error,
-  setZoomLevel
+  setZoomLevel, apiKey
 }) => {
   return (
     <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 shadow-lg overflow-hidden relative" style={{ height: '60vh' }}>
@@ -343,14 +345,11 @@ const RouteMap = ({
           </Marker>
         ))}
         
-        {/* Display route polyline - highlighted road between points */}
+        {/* Road highlighter component that properly highlights roads */}
         {routePolyline.length > 0 && (
-          <Polyline 
-            positions={routePolyline}
-            color="#4F46E5"  // Indigo color
-            weight={5}       // Thicker line
-            opacity={0.8}    // More visible
-            smoothFactor={1} // Smoother line
+          <RoadHighlighter 
+            coordinates={routePolyline} 
+            apiKey={apiKey}
           />
         )}
       </MapContainer>
@@ -407,15 +406,6 @@ const PastHistory = () => {
   
   // ORS API key from environment variables
   const ORS_API_KEY = process.env.REACT_APP_ORS_API_KEY;
-  
-  // Handle zoom slider change
-  const handleZoomChange = (e) => {
-    const newZoom = parseInt(e.target.value);
-    setZoomLevel(newZoom);
-    if (mapRef.current) {
-      mapRef.current.setZoom(newZoom);
-    }
-  };
   
   // Format date for Firestore query (DDMMYY format)
   const formatDateForFirestore = (dateString) => {
@@ -485,62 +475,48 @@ const PastHistory = () => {
     return total.toFixed(2);
   };
   
-  // Get route from OpenRouteService
-  const getRouteFromORS = async (coordinates) => {
+  // Prepare coordinates for road highlighting
+  const prepareCoordinatesForRoadHighlighting = (locations) => {
     try {
-      console.log('Fetching route from ORS with coordinates:', coordinates);
+      console.log('Preparing coordinates for road highlighting');
       
-      // Make sure we have at least 2 coordinates
-      if (coordinates.length < 2) {
-        throw new Error('Need at least 2 coordinates to create a route');
+      if (!locations || locations.length < 2) {
+        console.log('Not enough locations for road highlighting');
+        return [];
       }
       
       // ORS has a limit on the number of coordinates, so we'll use a subset if needed
-      // Typically, ORS can handle around 50-100 coordinates depending on the server
-      const maxCoords = 50;
-      let routeCoordinates = coordinates;
+      const maxCoords = 25;
+      let selectedLocations = [...locations];
       
-      if (coordinates.length > maxCoords) {
-        console.log(`Too many coordinates (${coordinates.length}), sampling down to ${maxCoords}`);
-        routeCoordinates = [];
-        const step = Math.floor(coordinates.length / maxCoords);
+      if (locations.length > maxCoords) {
+        console.log(`Too many locations (${locations.length}), sampling down to ${maxCoords}`);
+        selectedLocations = [];
+        const step = Math.floor(locations.length / maxCoords);
         
         // Always include first and last points
-        routeCoordinates.push(coordinates[0]);
+        selectedLocations.push(locations[0]);
         
         // Add evenly spaced points in between
-        for (let i = step; i < coordinates.length - 1; i += step) {
-          routeCoordinates.push(coordinates[i]);
+        for (let i = step; i < locations.length - 1; i += step) {
+          selectedLocations.push(locations[i]);
         }
         
         // Add the last point
-        routeCoordinates.push(coordinates[coordinates.length - 1]);
+        selectedLocations.push(locations[locations.length - 1]);
       }
       
-      const response = await axios.post(
-        `https://api.openrouteservice.org/v2/directions/driving-car/geojson`,
-        {
-          coordinates: routeCoordinates
-        },
-        {
-          headers: {
-            'Authorization': ORS_API_KEY,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
+      // Format coordinates as [lat, lon] for the RoadHighlighter component
+      const formattedCoordinates = selectedLocations.map(loc => [
+        loc.latitude, 
+        loc.longitude
+      ]);
       
-      // Extract the route coordinates from the response
-      if (response.data && response.data.features && response.data.features.length > 0) {
-        const route = response.data.features[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
-        console.log(`Successfully got route from ORS with ${route.length} points`);
-        return route;
-      } else {
-        throw new Error('Invalid response from ORS API');
-      }
+      console.log(`Prepared ${formattedCoordinates.length} waypoints for road highlighting`);
+      return formattedCoordinates;
     } catch (error) {
-      console.error('Error fetching route from ORS:', error);
-      throw error;
+      console.error('Error preparing coordinates for road highlighting:', error);
+      return [];
     }
   };
   
@@ -766,21 +742,18 @@ const PastHistory = () => {
       // Sort locations by timestamp to ensure correct order
       locations.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
       
-      // Prepare coordinates for ORS API
-      const coordinates = locations.map(loc => [loc.longitude, loc.latitude]);
-      
-      // Get route from ORS - we want to highlight the road between locations
-      if (coordinates.length >= 2) {
+      // Prepare coordinates for road highlighting
+      if (locations.length >= 2) {
         try {
           // First set a loading state for the route
           setRoutePolyline([]);
           
-          // Get the route from ORS API to highlight roads between points
-          const orsRoute = await getRouteFromORS(coordinates);
+          // Prepare coordinates for road highlighting
+          const formattedCoordinates = prepareCoordinatesForRoadHighlighting(locations);
           
-          // Set the route polyline to display on the map
-          setRoutePolyline(orsRoute);
-          console.log('Successfully got route from ORS with road highlighting');
+          // Set the route coordinates for the RoadHighlighter component
+          setRoutePolyline(formattedCoordinates);
+          console.log('Successfully prepared coordinates for road highlighting');
           
           // Center map on the first location
           if (locations.length > 0) {
@@ -804,14 +777,14 @@ const PastHistory = () => {
           setHistoryResults([historyResult]);
           
         } catch (routeError) {
-          console.error('Failed to get route from ORS:', routeError);
+          console.error('Failed to prepare coordinates for road highlighting:', routeError);
           
           // Show an error message but don't block the display of markers
           setError(`Note: Could not highlight roads between points. ${routeError.message}`);
           
-          // As a fallback, create a simple line connecting the points directly
-          const simpleLine = locations.map(loc => [loc.latitude, loc.longitude]);
-          setRoutePolyline(simpleLine);
+          // As a fallback, create a simple array of coordinates
+          const simpleCoordinates = locations.map(loc => [loc.latitude, loc.longitude]);
+          setRoutePolyline(simpleCoordinates);
           
           // Center map on the first location
           if (locations.length > 0) {
@@ -872,286 +845,43 @@ const PastHistory = () => {
           {error}
         </div>
       )}
-      {/* Date and time picker for history */}
-      <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 shadow-lg p-4">
-        <h2 className="text-xl font-bold mb-4">Select Date and Time</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">Date (YYYY-MM-DD)</label>
-            <input 
-              type="date" 
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              min={firstDayFormatted}
-              max={todayFormatted}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">Date (MM/DD/YYYY)</label>
-            <input 
-              type="text" 
-              placeholder="06/25/2025"
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              value={dateInput}
-              onChange={(e) => {
-                setDateInput(e.target.value);
-                // Try to convert to ISO format for the date picker
-                if (e.target.value.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
-                  const [month, day, year] = e.target.value.split('/');
-                  setSelectedDate(`${year}-${month}-${day}`);
-                }
-              }}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">Start Time</label>
-            <input 
-              type="time" 
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
-            />
-          </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">End Time</label>
-            <input 
-              type="time" 
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              value={endTime}
-              onChange={(e) => setEndTime(e.target.value)}
-            />
-          </div>
-          <div className="flex items-end">
-            <button 
-              className="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors font-medium"
-              onClick={() => {
-                // Set to full day
-                setStartTime('00:00');
-                setEndTime('23:59');
-              }}
-            >
-              Full Day
-            </button>
-          </div>
-        </div>
-        <button 
-          className="mt-4 w-full py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors font-medium"
-          onClick={handleSearch}
-          disabled={isLoading}
-        >
-          {isLoading ? 'Searching...' : 'Search History'}
-        </button>
-        
-        {error && (
-          <div className="mt-2 p-2 bg-red-900/50 text-red-300 rounded-lg">
-            {error}
-          </div>
-        )}
-      </div>
-
-      {/* Map for displaying historical routes - 40vh height as requested */}
-      <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 shadow-lg overflow-hidden relative" style={{ height: '40vh' }}>
-        <MapContainer 
-          center={mapPosition} 
-          zoom={zoomLevel} 
-          style={{ height: '100%', width: '100%' }}
-          zoomControl={false}
-          ref={mapRef}
-          className="z-0"
-        >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          
-          {/* Map controller for handling map reference and zoom */}
-          <MapController mapRef={mapRef} zoomLevel={zoomLevel} />
-          
-          {/* Display location markers */}
-          {locationHistory.map((location, index) => (
-            <Marker 
-              key={location.id || index}
-              position={[location.latitude, location.longitude]}
-              icon={index === 0 || index === locationHistory.length - 1 ? DefaultIcon : busIcon}
-            >
-              <Popup>
-                <div>
-                  <p><strong>Time:</strong> {location.timestamp}</p>
-                  <p><strong>Speed:</strong> {location.speed} km/h</p>
-                  <p><strong>Heading:</strong> {location.heading}°</p>
-                </div>
-              </Popup>
-            </Marker>
-          ))}
-          
-          {/* Display route polyline - highlighted road between points */}
-          {routePolyline.length > 0 && (
-            <Polyline 
-              positions={routePolyline}
-              color="#4F46E5"  // Indigo color
-              weight={5}       // Thicker line
-              opacity={0.8}    // More visible
-              smoothFactor={1} // Smoother line
-            />
-          )}
-        </MapContainer>
-        
-        {/* Map controls overlay */}
-        <div className="absolute bottom-4 right-4 z-10">
-          <div className="bg-gray-900/80 backdrop-blur-sm rounded-lg p-2 border border-gray-700 shadow-xl">
-            <div className="flex items-center space-x-1">
-              <button 
-                className="p-1 hover:bg-gray-600 rounded transition-colors text-white"
-                onClick={() => {
-                  const newZoom = Math.max(3, zoomLevel - 1);
-                  setZoomLevel(newZoom);
-                  if (mapRef.current) {
-                    mapRef.current.setZoom(newZoom);
-                  }
-                }}
-                title="Zoom out"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M5 10a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1z" clipRule="evenodd" />
-                </svg>
-              </button>
-              
-              <div className="flex flex-col items-center">
-                <input 
-                  type="range" 
-                  min="3" 
-                  max="18" 
-                  value={zoomLevel} 
-                  onChange={handleZoomChange}
-                  className="w-20 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer"
-                  title={`Zoom level: ${zoomLevel}`}
-                />
-                <span className="text-xs text-gray-300 mt-1">Zoom: {zoomLevel}</span>
-              </div>
-              
-              <button 
-                className="p-1 hover:bg-gray-600 rounded transition-colors text-white"
-                onClick={() => {
-                  const newZoom = Math.min(18, zoomLevel + 1);
-                  setZoomLevel(newZoom);
-                  if (mapRef.current) {
-                    mapRef.current.setZoom(newZoom);
-                  }
-                }}
-                title="Zoom in"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
-        
-        {/* Loading overlay */}
-        {isLoading && (
-          <div className="absolute inset-0 bg-gray-900/70 flex items-center justify-center">
-            <div className="text-white text-lg">Loading location data...</div>
-          </div>
-        )}
-      </div>
-
-      {/* History results in a compact format */}
-      <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 shadow-lg p-4">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">History Results</h2>
-          {historyResults.length > 0 && (
-            <button 
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors text-sm flex items-center space-x-2"
-              onClick={() => {
-                // Export data as CSV
-                const csvContent = "data:text/csv;charset=utf-8," + 
-                  "Date,Route,Start Time,End Time,Distance,Status\n" +
-                  historyResults.map(result => 
-                    `${result.date},${result.route},${result.startTime},${result.endTime},${result.distance},${result.status}`
-                  ).join("\n");
-                
-                const encodedUri = encodeURI(csvContent);
-                const link = document.createElement("a");
-                link.setAttribute("href", encodedUri);
-                link.setAttribute("download", `location_history_${selectedDate}.csv`);
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-              }}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-              <span>Export Data</span>
-            </button>
-          )}
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-700">
-            <thead>
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Date</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Route</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Start Time</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">End Time</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Distance</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-gray-800/30 divide-y divide-gray-700">
-              {historyResults.length > 0 ? (
-                historyResults.map((result, index) => (
-                  <tr key={index}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">{result.date}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">{result.route}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">{result.startTime}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">{result.endTime}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">{result.distance}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <span className="px-2 py-1 rounded-full text-xs bg-green-900/50 text-green-400">
-                        {result.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <button 
-                        className="text-indigo-400 hover:text-indigo-300"
-                        onClick={() => {
-                          // Center map on the first location of this route
-                          if (result.locations && result.locations.length > 0) {
-                            setMapPosition({ 
-                              lat: result.locations[0].latitude, 
-                              lng: result.locations[0].longitude 
-                            });
-                            if (mapRef.current) {
-                              mapRef.current.setView(
-                                [result.locations[0].latitude, result.locations[0].longitude],
-                                zoomLevel
-                              );
-                            }
-                          }
-                        }}
-                      >
-                        View on Map
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="7" className="px-6 py-4 text-center text-sm text-gray-400">
-                    No history data available. Please search for a specific date and time range.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      
+      {/* Date and time selector component */}
+      <DateTimeSelector 
+        selectedDate={selectedDate}
+        setSelectedDate={setSelectedDate}
+        dateInput={dateInput}
+        setDateInput={setDateInput}
+        startTime={startTime}
+        setStartTime={setStartTime}
+        endTime={endTime}
+        setEndTime={setEndTime}
+        firstDayFormatted={firstDayFormatted}
+        todayFormatted={todayFormatted}
+        handleSearch={handleSearch}
+      />
+      
+      {/* Map component - increased to 60vh for better visibility */}
+      <RouteMap 
+        mapPosition={mapPosition}
+        zoomLevel={zoomLevel}
+        mapRef={mapRef}
+        locationHistory={locationHistory}
+        routePolyline={routePolyline}
+        isLoading={isLoading}
+        error={error}
+        setZoomLevel={setZoomLevel}
+        apiKey={ORS_API_KEY}
+      />
+      
+      {/* History results table component */}
+      <HistoryResultsTable 
+        historyResults={historyResults}
+        selectedDate={selectedDate}
+        mapRef={mapRef}
+        zoomLevel={zoomLevel}
+        setMapPosition={setMapPosition}
+      />
     </div>
   );
 };

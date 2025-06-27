@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import RealTimeTracking from '../components/tracking/RealTimeTracking';
-import PastHistory from '../components/tracking/PastHistory';
+import PastHistory from '../components/tracking/PastHistoryRefactored';
 
 const BusTracking = () => {
   const navigate = useNavigate();
