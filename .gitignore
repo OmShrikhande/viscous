@@ -16,7 +16,7 @@ Backend/**/firebaseConfig.js
 Backend/**/*.env
 Backend/**/.env*
 Backend/**/config/*.js
-
+viscous/Backend/Bustracking Admin/Admin/Backend/FetchBusLocation.ps1
 # Backend logs and runtime data
 Backend/**/logs
 Backend/**/*.log
