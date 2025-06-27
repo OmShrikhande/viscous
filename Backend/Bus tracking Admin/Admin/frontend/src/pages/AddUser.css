@@ -1,0 +1,84 @@
+.adduser-container {
+  max-width: 700px;
+  margin: 2rem auto;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  padding: 2rem;
+}
+
+.adduser-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+  color: #22223b;
+}
+
+.adduser-form label {
+  font-weight: 500;
+  color: #374151;
+}
+
+.adduser-form input,
+.adduser-form textarea {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  margin-top: 0.25rem;
+  margin-bottom: 1rem;
+  font-size: 1rem;
+  background: #f9fafb;
+  transition: border 0.2s;
+}
+
+.adduser-form input:focus,
+.adduser-form textarea:focus {
+  border-color: #2563eb;
+  outline: none;
+}
+
+.adduser-form .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+}
+
+.adduser-form .submit-btn {
+  background: #2563eb;
+  color: #fff;
+  font-weight: 600;
+  padding: 0.5rem 1.5rem;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.adduser-form .submit-btn:disabled {
+  background: #93c5fd;
+  cursor: not-allowed;
+}
+
+.adduser-form .submit-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.adduser-alert-success {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #10b981;
+  padding: 0.75rem 1rem;
+  border-radius: 5px;
+  margin-bottom: 1rem;
+}
+
+.adduser-alert-error {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #ef4444;
+  padding: 0.75rem 1rem;
+  border-radius: 5px;
+  margin-bottom: 1rem;
+}
