@@ -27,7 +27,7 @@ const Register = () => {
     try {
       console.log('Attempting to register with:', { email: email.trim() });
       
-      const res = await axios.post('http://localhost:5000/api/admin/register', {
+      const res = await axios.post('http://localhost:3001/api/admin/register', {
         email: email.trim(),
         password: password.trim(),
       });

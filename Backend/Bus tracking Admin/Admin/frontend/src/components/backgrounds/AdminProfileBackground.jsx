@@ -12,7 +12,6 @@ const AdminProfileBackground = ({ children }) => {
     let mistParticles = [];
     let emberParticles = [];
     let shadowShapes = [];
-    let time = 0;
 
     const resizeCanvas = () => {
       canvas.width = window.innerWidth;

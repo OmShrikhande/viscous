@@ -31,7 +31,7 @@ app.use('/uploads', express.static('uploads'));
 app.get('/api/config', (req, res) => {
   res.json({
     apiBaseUrl: API_BASE_URL,
-    port: process.env.PORT || 5000
+    port: process.env.PORT || 3001
   });
 });
 
@@ -69,5 +69,6 @@ if (process.env.MONGO_URI) {
   console.log('✅ MongoDB connection skipped - Using mock data');
 }
 
-const PORT = process.env.PORT || 5000;
+// Change port to 3001 to match frontend expectations
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, '0.0.0.0', () => console.log(`Admin Backend Server running on port ${PORT}`));

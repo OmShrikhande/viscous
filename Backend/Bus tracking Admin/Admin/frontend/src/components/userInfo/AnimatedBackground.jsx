@@ -25,6 +25,10 @@ const drawShape = (ctx, shape, x, y, size, color) => {
       }
       ctx.closePath();
       break;
+    default:
+      // Default to circle if shape is not recognized
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      break;
   }
   ctx.fillStyle = color;
   ctx.fill();

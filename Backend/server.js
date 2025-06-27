@@ -10,6 +10,18 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const dotenv = require('dotenv');
+
+// Load environment variables from .env file
+dotenv.config();
+
+// Extract all environment variables that start with FIREBASE_
+const firebaseEnvVars = {};
+Object.keys(process.env).forEach(key => {
+  if (key.startsWith('FIREBASE_')) {
+    firebaseEnvVars[key] = process.env[key];
+  }
+});
 
 // Configuration for each server
 const servers = [
@@ -17,22 +29,35 @@ const servers = [
     name: 'ESP8266 Server',
     path: path.join(__dirname, 'Esp8266 server'),
     script: 'Server.cjs',
-    port: 3001,
-    env: { PORT: 3001 }
+    port: process.env.PORT_ESP8266 || 3001,
+    env: { 
+      PORT: process.env.PORT_ESP8266 || 3001,
+      ...firebaseEnvVars
+    }
   },
   {
     name: 'Tracking Server',
     path: path.join(__dirname, 'Tracking'),
     script: 'server.js',
-    port: 3002,
-    env: { PORT: 3002 }
+    port: process.env.PORT_TRACKING || 3002,
+    env: { 
+      PORT: process.env.PORT_TRACKING || 3002,
+      ...firebaseEnvVars
+    }
   },
   {
     name: 'Admin Backend',
     path: path.join(__dirname, 'Bus tracking Admin/Admin/Backend'),
     script: 'server.js',
-    port: 5000,
-    env: { PORT: 5000 }
+    port: process.env.PORT_ADMIN || 5000,
+    env: { 
+      PORT: process.env.PORT_ADMIN || 5000,
+      MONGODB_URI: process.env.MONGODB_URI,
+      JWT_SECRET: process.env.JWT_SECRET,
+      JWT_EXPIRY: process.env.JWT_EXPIRY,
+      API_BASE_URL: process.env.API_BASE_URL,
+      ...firebaseEnvVars
+    }
   }
 ];
 

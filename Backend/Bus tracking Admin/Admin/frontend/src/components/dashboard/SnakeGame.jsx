@@ -6,14 +6,14 @@ const INITIAL_SNAKE = [{ x: 3, y: 3 }];
 const INITIAL_DIRECTION = { x: 0, y: -1 };
 
 function getRandomFood(snake) {
-  let newFood;
+  let foodPosition;
   do {
-    newFood = {
+    foodPosition = {
       x: Math.floor(Math.random() * GRID_SIZE),
       y: Math.floor(Math.random() * GRID_SIZE),
     };
-  } while (snake.some(seg => seg.x === newFood.x && seg.y === newFood.y));
-  return newFood;
+  } while (snake.some(seg => seg.x === foodPosition.x && seg.y === foodPosition.y));
+  return foodPosition;
 }
 
 const SnakeGame = () => {

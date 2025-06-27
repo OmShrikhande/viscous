@@ -51,7 +51,7 @@ const Login = () => {
   const loginHandler = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post('http://localhost:5000/api/admin/login', { email, password });
+      const res = await axios.post('http://localhost:3001/api/admin/login', { email, password });
       
       // Make sure we're getting a token back
       if (!res.data.token) {

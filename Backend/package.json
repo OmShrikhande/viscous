@@ -4,16 +4,32 @@
   "description": "Combined server for Bus Tracking System with ESP8266, Tracking, and Admin backends",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
-    "install-all": "node install-all.js"
+    "start": "node unified-server.js",
+    "dev": "nodemon unified-server.js",
+    "setup": "node setup.js",
+    "legacy": "node server.js",
+    "dev-legacy": "nodemon server.js"
   },
   "dependencies": {
+    "bcrypt": "^6.0.0",
+    "bcryptjs": "^2.4.3",
+    "body-parser": "^2.2.0",
     "child_process": "^1.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^5.1.0",
+    "firebase": "^11.9.1",
+    "firebase-admin": "^13.4.0",
+    "fs": "0.0.1-security",
+    "geolib": "^3.3.4",
+    "jsonwebtoken": "^9.0.0",
+    "mongoose": "^7.8.7",
+    "multer": "^2.0.1",
+    "nodemailer": "^7.0.3",
     "path": "^0.12.7",
-    "fs": "0.0.1-security"
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "nodemon": "^3.0.2"
   }
 }

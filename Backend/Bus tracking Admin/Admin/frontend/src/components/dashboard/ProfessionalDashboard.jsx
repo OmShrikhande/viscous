@@ -1,75 +1,89 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import SnakeGame from './SnakeGame';
 
 const ProfessionalDashboard = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dashboardStats, setDashboardStats] = useState(null);
-  const [recentActivities, setRecentActivities] = useState([]);
-  const [statsLoading, setStatsLoading] = useState(true);
+  const [, ] = useState([]);
+  const [, setStatsLoading] = useState(true);
   const [adminInfo, setAdminInfo] = useState(null);
   const navigate = useNavigate();
 
   // Fetch dashboard data
   useEffect(() => {
-    fetchDashboardData();
-    fetchAdminInfo();
-  }, []);
-
-  const fetchDashboardData = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        console.error('No token found, cannot fetch dashboard data');
-        setStatsLoading(false);
-        return;
-      }
-
-      // Fetch stats
+    const fetchDashboardData = async () => {
       try {
-        const statsResponse = await axios.get('http://localhost:5000/api/dashboard/stats', {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          console.error('No token found, cannot fetch dashboard data');
+          setStatsLoading(false);
+          return;
+        }
+
+        // Fetch stats
+        try {
+          const statsResponse = await axios.get('http://localhost:3001/api/dashboard/stats', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          if (statsResponse.data && statsResponse.data.data) {
+            setDashboardStats(statsResponse.data.data);
+          } else {
+            console.error('Invalid stats response format:', statsResponse.data);
+          }
+        } catch (err) {
+          console.error('Error fetching dashboard stats:', err);
+          
+          // If we get a 401 error, redirect to login
+          if (err.response && err.response.status === 401) {
+            localStorage.removeItem('token');
+            navigate('/');
+            return;
+          }
+        }
+
+        setStatsLoading(false);
+      } catch (err) {
+        console.error('Error in fetchDashboardData:', err);
+        setStatsLoading(false);
+      }
+    };
+
+    const fetchAdminInfo = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          console.error('No token found, cannot fetch admin info');
+          return;
+        }
+
+        const response = await axios.get('http://localhost:3001/api/admin/profile', {
           headers: { Authorization: `Bearer ${token}` }
         });
         
-        if (statsResponse.data && statsResponse.data.data) {
-          setDashboardStats(statsResponse.data.data);
+        if (response.data && response.data.success) {
+          setAdminInfo(response.data.admin);
         } else {
-          console.error('Invalid stats response format:', statsResponse.data);
+          console.error('Invalid response format for admin profile:', response.data);
         }
       } catch (err) {
-        console.error('Error fetching dashboard stats:', err);
+        console.error('Error fetching admin info:', err);
         
         // If we get a 401 error, redirect to login
         if (err.response && err.response.status === 401) {
           localStorage.removeItem('token');
           navigate('/');
-          return;
         }
       }
+    };
 
-      // Fetch activities
-      try {
-        const activitiesResponse = await axios.get('http://localhost:5000/api/dashboard/recent-activities', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        
-        if (activitiesResponse.data && activitiesResponse.data.activities) {
-          setRecentActivities(activitiesResponse.data.activities);
-        } else {
-          console.error('Invalid activities response format:', activitiesResponse.data);
-        }
-      } catch (err) {
-        console.error('Error fetching recent activities:', err);
-        // Don't redirect for this error as it's not critical
-      }
+    fetchDashboardData();
+    fetchAdminInfo();
+  }, [navigate]);
 
-      setStatsLoading(false);
-    } catch (err) {
-      console.error('Error in fetchDashboardData:', err);
-      setStatsLoading(false);
-    }
-  };
+
 
   const menuItems = [
     { name: 'Dashboard', icon: '🏠', path: '/dashboard' },
@@ -82,33 +96,7 @@ const ProfessionalDashboard = ({ children }) => {
     { name: 'Settings', icon: '⚙️', path: '/settings' }
   ];
 
-  const fetchAdminInfo = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        console.error('No token found, cannot fetch admin info');
-        return;
-      }
 
-      const response = await axios.get('http://localhost:5000/api/admin/profile', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      if (response.data && response.data.success) {
-        setAdminInfo(response.data.admin);
-      } else {
-        console.error('Invalid response format for admin profile:', response.data);
-      }
-    } catch (err) {
-      console.error('Error fetching admin info:', err);
-      
-      // If we get a 401 error, redirect to login
-      if (err.response && err.response.status === 401) {
-        localStorage.removeItem('token');
-        navigate('/');
-      }
-    }
-  };
 
   const handleLogout = async () => {
     try {

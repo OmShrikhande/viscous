@@ -37,7 +37,7 @@ const AddUser = () => {
       setLoading(true);
       setError('');
       const token = localStorage.getItem('token');
-      await axios.post('http://localhost:5000/api/admin/users', formData, {
+      await axios.post('http://localhost:3001/api/admin/users', formData, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setSuccess('User added successfully');

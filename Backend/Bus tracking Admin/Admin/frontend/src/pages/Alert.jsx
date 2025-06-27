@@ -36,7 +36,7 @@ const Alert = () => {
 
   const fetchAdminInfo = async (token) => {
     try {
-      const response = await axios.get('http://localhost:5000/api/admin/profile', {
+      const response = await axios.get('http://localhost:3001/api/admin/profile', {
         headers: { Authorization: `Bearer ${token}` }
       });
       

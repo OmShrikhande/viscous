@@ -58,6 +58,7 @@ const initializeFirebase = () => {
   try {
     // Check if already initialized
     if (firebaseApp) {
+      console.log('Firebase already initialized, reusing existing instance');
       return { 
         app: firebaseApp, 
         firestore: firestoreDb, 
@@ -66,14 +67,18 @@ const initializeFirebase = () => {
       };
     }
     
+    console.log('Initializing Firebase with config:', JSON.stringify(firebaseConfig));
+    
     // Initialize Firebase app
     firebaseApp = initializeApp(firebaseConfig);
     
     // Initialize Firestore
     firestoreDb = getFirestore(firebaseApp);
+    console.log('Firestore initialized');
     
     // Initialize Realtime Database
     realtimeDb = getDatabase(firebaseApp);
+    console.log('Realtime Database initialized with URL:', firebaseConfig.databaseURL);
     
     console.log('Firebase initialized successfully');
     
@@ -85,6 +90,7 @@ const initializeFirebase = () => {
     };
   } catch (error) {
     console.error('Error initializing Firebase:', error);
+    console.error('Error details:', error.stack);
     
     // Return a dummy object that won't throw errors
     return {
@@ -230,6 +236,88 @@ const getFirebaseData = async (_, date) => {
 };
 
 /**
+ * Get real-time bus location, speed, and distance data from Firebase Realtime Database
+ * @param {string} busId - The bus ID (ignored for now, using fixed 'bus' node)
+ * @returns {Promise<Object>} The real-time data from Firebase
+ */
+const getRealTimeBusData = async (busId = 'bus') => {
+  try {
+    // Initialize Firebase if not already initialized
+    const { database, initialized } = initializeFirebase();
+    
+    if (!initialized) {
+      console.error('Firebase not initialized');
+      return null;
+    }
+    
+    console.log(`Fetching real-time data from 'bus' node in Firebase`);
+    
+    // Reference to the bus data in the Realtime Database - using fixed 'bus' node
+    // as per the data structure provided
+    const busRef = ref(database, 'bus');
+    console.log('Created reference to bus node:', busRef);
+    
+    // Try to list all nodes at the root level to see what's available
+    try {
+      const rootRef = ref(database, '/');
+      const rootSnapshot = await get(rootRef);
+      
+      if (rootSnapshot.exists()) {
+        console.log('Available nodes in Firebase Realtime Database:');
+        const rootData = rootSnapshot.val();
+        console.log(JSON.stringify(rootData, null, 2));
+      } else {
+        console.log('No data found in Firebase Realtime Database root');
+      }
+    } catch (rootError) {
+      console.error('Error listing root nodes:', rootError);
+    }
+    
+    // Get the data
+    console.log('Attempting to get data from bus node...');
+    const snapshot = await get(busRef);
+    
+    if (!snapshot.exists()) {
+      console.log(`No real-time data found in 'bus' node`);
+      return null;
+    }
+    
+    // Get the data
+    const busData = snapshot.val();
+    console.log('Real-time bus data:', JSON.stringify(busData, null, 2));
+    
+    // Extract location, speed, and distance data
+    const location = busData.Location || {};
+    const distance = busData.Distance || {};
+    
+    console.log('Location data:', JSON.stringify(location, null, 2));
+    console.log('Distance data:', JSON.stringify(distance, null, 2));
+    
+    // Format the data
+    const formattedData = {
+      location: {
+        latitude: parseFloat(location.Latitude || 0),
+        longitude: parseFloat(location.Longitude || 0),
+        speed: parseFloat(location.Speed || 0),
+        timestamp: location.Timestamp || new Date().toISOString()
+      },
+      distance: {
+        daily: parseFloat(distance.DailyDistance || 0),
+        total: parseFloat(distance.TotalDistance || 0)
+      }
+    };
+    
+    console.log('Formatted real-time data:', formattedData);
+    return formattedData;
+    
+  } catch (error) {
+    console.error('Error in getRealTimeBusData:', error);
+    console.error('Error stack:', error.stack);
+    return null;
+  }
+};
+
+/**
  * Create or update location data in the locationhistory collection
  * @param {string} userId - The user/bus ID
  * @param {number} latitude - The latitude coordinate
@@ -354,6 +442,7 @@ module.exports = {
   getFirebaseData,
   saveLocationData,
   getBusStops,
+  getRealTimeBusData,
   firebaseConfig,
   // Export Firebase client SDK functions for direct use
   firestoreFunctions: {

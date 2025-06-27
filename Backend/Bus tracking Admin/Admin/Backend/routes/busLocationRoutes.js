@@ -4,8 +4,10 @@ const { protect } = require('../middleware/auth');
 const { 
   initializeFirebase,
   getFirebaseData,
-  getBusStops
+  getBusStops,
+  getRealTimeBusData
 } = require('../firebase-client');
+const { getBusStopsFromExcel } = require('../utils/excelReader');
 
 // Initialize Firebase
 const firebase = initializeFirebase();
@@ -144,16 +146,112 @@ router.get('/bus-location/:userId/history', async (req, res) => {
   });
 });
 
-// Get bus stops from Route2 collection
+// Get the latest timestamp for a bus location
+router.get('/bus-location/:userId/latest-timestamp', async (req, res) => {
+  const userId = req.params.userId || 'bus-1';
+  try {
+    console.log(`Checking latest timestamp for bus ${userId}...`);
+    
+    const today = new Date();
+    
+    // Function to pad single digits with a leading zero
+    const pad = (n) => n.toString().padStart(2, '0');
+    
+    const day = pad(today.getDate());
+    const month = pad(today.getMonth() + 1);
+    const year = today.getFullYear().toString().slice(2);
+    
+    const formattedToday = `${day}${month}${year}`;
+    
+    // Always use locationhistory collection
+    const routeId = 'locationhistory';
+    
+    // Get the data from Firebase
+    const firebaseData = await getFirebaseData(routeId, formattedToday);
+    
+    // If Firebase data is available, return the timestamp of the most recent entry
+    if (firebaseData && firebaseData.entries && firebaseData.entries.length > 0) {
+      console.log(`Found ${firebaseData.entries.length} entries in Firebase`);
+      
+      // Get the most recent entry
+      const latestEntry = firebaseData.entries[0];
+      const timestamp = latestEntry.timestamp;
+      
+      return res.json({
+        success: true,
+        timestamp: timestamp,
+        source: 'firebase'
+      });
+    }
+    
+    // If no data was found, return null timestamp
+    console.log('No data found in Firebase for timestamp check');
+    return res.json({
+      success: true,
+      timestamp: null,
+      source: 'none'
+    });
+    
+  } catch (error) {
+    console.error('Error checking latest timestamp:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error while checking latest timestamp',
+      error: error.message
+    });
+  }
+});
+
+// Get real-time bus data from Firebase Realtime Database
+router.get('/bus-realtime/:busId', async (req, res) => {
+  // Note: busId is currently ignored, using fixed 'bus' node
+  try {
+    console.log(`Fetching real-time data from 'bus' node in Firebase...`);
+    
+    // Get the real-time data from Firebase
+    const realtimeData = await getRealTimeBusData();
+    
+    if (realtimeData) {
+      console.log(`Found real-time data in 'bus' node`);
+      
+      return res.json({
+        success: true,
+        data: realtimeData,
+        source: 'firebase-realtime'
+      });
+    }
+    
+    // If no data was found, return null data
+    console.log(`No real-time data found in 'bus' node`);
+    return res.json({
+      success: true,
+      data: null,
+      source: 'none'
+    });
+    
+  } catch (error) {
+    console.error('Error fetching real-time bus data:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error while fetching real-time bus data',
+      error: error.message
+    });
+  }
+});
+
+// Get bus stops from Route2 Excel file
 router.get('/bus-stops', async (req, res) => {
   try {
-    console.log('Fetching bus stops from Route2 collection...');
+    // Get the bus ID from query parameters
+    const busId = req.query.busId || null;
     
-    // Get the bus stops from Firebase
-    const stops = await getBusStops();
+    console.log(`Fetching bus stops from Route2 Excel file for bus ID: ${busId || 'all'}`);
+    
+    // Get the bus stops from Excel file
+    const stops = getBusStopsFromExcel(busId);
     
     if (stops && stops.length > 0) {
-      console.log(`Found ${stops.length} bus stops in Route2 collection`);
+      console.log(`Found ${stops.length} bus stops in Route2 Excel file`);
       
       return res.json({
         success: true,
@@ -163,7 +261,7 @@ router.get('/bus-stops', async (req, res) => {
     }
     
     // If no stops were found, return empty array with success status
-    console.log('No bus stops found in Route2 collection, returning empty array');
+    console.log('No bus stops found in Route2 Excel file, returning empty array');
     return res.json({
       success: true,
       stops: [],
@@ -171,10 +269,10 @@ router.get('/bus-stops', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Error fetching bus stops:', error);
+    console.error('Error fetching bus stops from Excel:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Server error while fetching bus stops',
+      message: 'Server error while fetching bus stops from Excel',
       error: error.message
     });
   }

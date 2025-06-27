@@ -24,7 +24,7 @@ const UserData = () => {
         return;
       }
       
-      const response = await axios.get('http://localhost:5000/api/admin/users', {
+      const response = await axios.get('http://localhost:3001/api/admin/users', {
         headers: { Authorization: `Bearer ${token}` }
       });
       

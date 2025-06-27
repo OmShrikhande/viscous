@@ -11,6 +11,23 @@ html, body, #root {
 .leaflet-container {
   height: 100%;
   width: 100%;
+  z-index: 1;
+}
+
+/* Ensure map controls are above the map */
+.map-controls {
+  z-index: 1000 !important;
+  position: relative;
+  pointer-events: auto !important;
+  /* Make sure controls are always visible */
+  transform: translate(-50%, 0) !important;
+  margin-bottom: 20px;
+}
+
+/* Fix for leaflet controls being under other elements */
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 900 !important;
 }
 
 .bus-icon {
