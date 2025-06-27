@@ -6,7 +6,6 @@ import 'leaflet/dist/leaflet.css';
 import axios from 'axios';
 import { firestoreDb } from '../../config/firebase';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
-import RoadHighlighter from './RoadHighlighter';
 
 // Fix for default marker icons in Leaflet with React
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -38,6 +37,9 @@ const setupMapIcons = () => {
 // Initialize map icons
 const { DefaultIcon, busIcon } = setupMapIcons();
 
+// OpenRouteService API key
+const apiKey = '5b3ce3597851110001cf624849f7d76714eb412994780d06dcd7c932';
+
 // Component to handle map reference and zoom control
 const MapController = ({ mapRef, zoomLevel }) => {
   const map = useMap();
@@ -53,6 +55,118 @@ const MapController = ({ mapRef, zoomLevel }) => {
       map.setZoom(zoomLevel);
     }
   }, [map, zoomLevel, mapRef]);
+  
+  return null;
+};
+
+// RouteHighlighter Component - Draws routes between points
+const RouteHighlighter = ({ locationHistory }) => {
+  const map = useMap();
+  const routeLayerRef = useRef(null);
+  
+  useEffect(() => {
+    // Clear previous route if it exists
+    if (routeLayerRef.current) {
+      map.removeLayer(routeLayerRef.current);
+      routeLayerRef.current = null;
+    }
+    
+    // Only proceed if we have at least 2 points
+    if (locationHistory.length < 2) return;
+    
+    const drawRoute = async () => {
+      try {
+        // Prepare coordinates for the API - OpenRouteService expects [lng, lat] format
+        const coordinates = locationHistory.map(location => [
+          location.longitude,
+          location.latitude
+        ]);
+        
+        // If we have too many points, let's use a subset to avoid API limits
+        // OpenRouteService has a limit of 50 points for the free tier
+        const maxPoints = 50;
+        let routeCoordinates = coordinates;
+        
+        if (coordinates.length > maxPoints) {
+          // Sample points evenly
+          const step = Math.floor(coordinates.length / maxPoints);
+          routeCoordinates = [];
+          
+          // Always include first and last point
+          routeCoordinates.push(coordinates[0]);
+          
+          // Add evenly spaced points in between
+          for (let i = step; i < coordinates.length - 1; i += step) {
+            routeCoordinates.push(coordinates[i]);
+          }
+          
+          // Add the last point
+          routeCoordinates.push(coordinates[coordinates.length - 1]);
+        }
+        
+        // Call OpenRouteService API
+        const url = 'https://api.openrouteservice.org/v2/directions/driving-car/geojson';
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Authorization': apiKey,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            coordinates: routeCoordinates
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`API request failed with status ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // Draw the route on the map
+        const route = L.geoJSON(data, {
+          style: {
+            color: '#4F46E5', // Indigo color to match the theme
+            weight: 5,
+            opacity: 0.7,
+            lineJoin: 'round'
+          }
+        }).addTo(map);
+        
+        // Store reference to remove it later if needed
+        routeLayerRef.current = route;
+        
+        // Fit map bounds to show the entire route
+        map.fitBounds(route.getBounds());
+      } catch (error) {
+        console.error('Error drawing route:', error);
+        
+        // Fallback: Draw a simple polyline if API fails
+        const polyline = L.polyline(
+          locationHistory.map(loc => [loc.latitude, loc.longitude]),
+          {
+            color: '#4F46E5',
+            weight: 4,
+            opacity: 0.7,
+            lineJoin: 'round',
+            dashArray: '5, 10' // Dashed line to indicate it's a direct line, not a road route
+          }
+        ).addTo(map);
+        
+        routeLayerRef.current = polyline;
+        map.fitBounds(polyline.getBounds());
+      }
+    };
+    
+    drawRoute();
+    
+    // Cleanup function
+    return () => {
+      if (routeLayerRef.current) {
+        map.removeLayer(routeLayerRef.current);
+      }
+    };
+  }, [map, locationHistory]);
   
   return null;
 };
@@ -267,7 +381,7 @@ const HistoryResultsTable = ({ historyResults, selectedDate, mapRef, zoomLevel, 
                       {result.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm flex space-x-4">
                     <button 
                       className="text-indigo-400 hover:text-indigo-300"
                       onClick={() => {
@@ -286,8 +400,28 @@ const HistoryResultsTable = ({ historyResults, selectedDate, mapRef, zoomLevel, 
                         }
                       }}
                     >
-                      View on Map
+                      View Start
                     </button>
+                    
+                    {result.locations && result.locations.length >= 2 && (
+                      <button 
+                        className="text-green-400 hover:text-green-300"
+                        onClick={() => {
+                          // Center map to show the entire route
+                          if (mapRef.current) {
+                            // Create a bounds object from all locations
+                            const bounds = L.latLngBounds(
+                              result.locations.map(loc => [loc.latitude, loc.longitude])
+                            );
+                            
+                            // Fit the map to these bounds
+                            mapRef.current.fitBounds(bounds);
+                          }
+                        }}
+                      >
+                        Show Route
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))
@@ -307,8 +441,8 @@ const HistoryResultsTable = ({ historyResults, selectedDate, mapRef, zoomLevel, 
 
 // RouteMap Component
 const RouteMap = ({ 
-  mapPosition, zoomLevel, mapRef, locationHistory, routePolyline, isLoading, error,
-  setZoomLevel, apiKey
+  mapPosition, zoomLevel, mapRef, locationHistory, isLoading, error,
+  setZoomLevel
 }) => {
   return (
     <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 shadow-lg overflow-hidden relative" style={{ height: '60vh' }}>
@@ -328,6 +462,11 @@ const RouteMap = ({
         {/* Map controller for handling map reference and zoom */}
         <MapController mapRef={mapRef} zoomLevel={zoomLevel} />
         
+        {/* Route highlighter - draws the route between points */}
+        {locationHistory.length >= 2 && (
+          <RouteHighlighter locationHistory={locationHistory} />
+        )}
+        
         {/* Display location markers */}
         {locationHistory.map((location, index) => (
           <Marker 
@@ -344,14 +483,7 @@ const RouteMap = ({
             </Popup>
           </Marker>
         ))}
-        
-        {/* Road highlighter component that properly highlights roads */}
-        {routePolyline.length > 0 && (
-          <RoadHighlighter 
-            coordinates={routePolyline} 
-            apiKey={apiKey}
-          />
-        )}
+
       </MapContainer>
       
       {/* Map controls overlay */}
@@ -398,14 +530,10 @@ const PastHistory = () => {
   
   // State for location history data
   const [locationHistory, setLocationHistory] = useState([]);
-  const [routePolyline, setRoutePolyline] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [historyResults, setHistoryResults] = useState([]);
   const [totalDistance, setTotalDistance] = useState(0);
-  
-  // ORS API key from environment variables
-  const ORS_API_KEY = process.env.REACT_APP_ORS_API_KEY;
   
   // Format date for Firestore query (DDMMYY format)
   const formatDateForFirestore = (dateString) => {
@@ -475,50 +603,7 @@ const PastHistory = () => {
     return total.toFixed(2);
   };
   
-  // Prepare coordinates for road highlighting
-  const prepareCoordinatesForRoadHighlighting = (locations) => {
-    try {
-      console.log('Preparing coordinates for road highlighting');
-      
-      if (!locations || locations.length < 2) {
-        console.log('Not enough locations for road highlighting');
-        return [];
-      }
-      
-      // ORS has a limit on the number of coordinates, so we'll use a subset if needed
-      const maxCoords = 25;
-      let selectedLocations = [...locations];
-      
-      if (locations.length > maxCoords) {
-        console.log(`Too many locations (${locations.length}), sampling down to ${maxCoords}`);
-        selectedLocations = [];
-        const step = Math.floor(locations.length / maxCoords);
-        
-        // Always include first and last points
-        selectedLocations.push(locations[0]);
-        
-        // Add evenly spaced points in between
-        for (let i = step; i < locations.length - 1; i += step) {
-          selectedLocations.push(locations[i]);
-        }
-        
-        // Add the last point
-        selectedLocations.push(locations[locations.length - 1]);
-      }
-      
-      // Format coordinates as [lat, lon] for the RoadHighlighter component
-      const formattedCoordinates = selectedLocations.map(loc => [
-        loc.latitude, 
-        loc.longitude
-      ]);
-      
-      console.log(`Prepared ${formattedCoordinates.length} waypoints for road highlighting`);
-      return formattedCoordinates;
-    } catch (error) {
-      console.error('Error preparing coordinates for road highlighting:', error);
-      return [];
-    }
-  };
+
   
   // Handle search
   const handleSearch = async () => {
@@ -742,73 +827,27 @@ const PastHistory = () => {
       // Sort locations by timestamp to ensure correct order
       locations.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
       
-      // Prepare coordinates for road highlighting
-      if (locations.length >= 2) {
-        try {
-          // First set a loading state for the route
-          setRoutePolyline([]);
-          
-          // Prepare coordinates for road highlighting
-          const formattedCoordinates = prepareCoordinatesForRoadHighlighting(locations);
-          
-          // Set the route coordinates for the RoadHighlighter component
-          setRoutePolyline(formattedCoordinates);
-          console.log('Successfully prepared coordinates for road highlighting');
-          
-          // Center map on the first location
-          if (locations.length > 0) {
-            setMapPosition({ 
-              lat: locations[0].latitude, 
-              lng: locations[0].longitude 
-            });
-          }
-          
-          // Create history result entry
-          const historyResult = {
-            date: dateInput || selectedDate,
-            route: 'Route ' + formattedDate,
-            startTime: startTime,
-            endTime: endTime,
-            distance: distance + ' km',
-            status: 'Completed',
-            locations: locations
-          };
-          
-          setHistoryResults([historyResult]);
-          
-        } catch (routeError) {
-          console.error('Failed to prepare coordinates for road highlighting:', routeError);
-          
-          // Show an error message but don't block the display of markers
-          setError(`Note: Could not highlight roads between points. ${routeError.message}`);
-          
-          // As a fallback, create a simple array of coordinates
-          const simpleCoordinates = locations.map(loc => [loc.latitude, loc.longitude]);
-          setRoutePolyline(simpleCoordinates);
-          
-          // Center map on the first location
-          if (locations.length > 0) {
-            setMapPosition({ 
-              lat: locations[0].latitude, 
-              lng: locations[0].longitude 
-            });
-          }
-          
-          // Create history result entry with a note about the route
-          const historyResult = {
-            date: dateInput || selectedDate,
-            route: 'Route ' + formattedDate,
-            startTime: startTime,
-            endTime: endTime,
-            distance: distance + ' km',
-            status: 'Completed (Direct line shown)',
-            locations: locations
-          };
-          
-          setHistoryResults([historyResult]);
-        }
+      // Center map on the first location
+      if (locations.length > 0) {
+        setMapPosition({ 
+          lat: locations[0].latitude, 
+          lng: locations[0].longitude 
+        });
+        
+        // Create history result entry
+        const historyResult = {
+          date: dateInput || selectedDate,
+          route: 'Route ' + formattedDate,
+          startTime: startTime,
+          endTime: endTime,
+          distance: distance + ' km',
+          status: 'Completed',
+          locations: locations
+        };
+        
+        setHistoryResults([historyResult]);
       } else {
-        setError('Not enough location points to create a route');
+        setError('No location points found for the selected time period.');
       }
       
     } catch (error) {
@@ -867,11 +906,9 @@ const PastHistory = () => {
         zoomLevel={zoomLevel}
         mapRef={mapRef}
         locationHistory={locationHistory}
-        routePolyline={routePolyline}
         isLoading={isLoading}
         error={error}
         setZoomLevel={setZoomLevel}
-        apiKey={ORS_API_KEY}
       />
       
       {/* History results table component */}
