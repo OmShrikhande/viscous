@@ -128,18 +128,37 @@ if (process.env.MONGODB_URI) {
 app.post("/esp8266/upload", async (req, res) => {
   try {
     const data = req.body;
-    if (!data || !data.location || !data.distance) {
-      return res.status(400).send("Missing required data.");
-    }
 
     const now = new Date();
     const pad = (n) => n.toString().padStart(2, "0");
 
     // Format: DDMMYY
     const date = `${pad(now.getDate())}${pad(now.getMonth() + 1)}${now.getFullYear().toString().slice(2)}`;
-    
     // Format: HHMMSS
     const time = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+
+    // Compare NodeMCU date with server date
+    let incomingTimestamp = data?.location?.timestamp;
+    let useServerTimestamp = false;
+
+    if (incomingTimestamp) {
+      // Try to parse the incoming timestamp as a Date
+      const incomingDate = new Date(incomingTimestamp);
+      // Compare only the date part (YYYY-MM-DD)
+      const serverDateStr = now.toISOString().slice(0, 10);
+      const incomingDateStr = incomingDate.toISOString().slice(0, 10);
+
+      if (serverDateStr !== incomingDateStr) {
+        useServerTimestamp = true;
+      }
+    } else {
+      useServerTimestamp = true;
+    }
+
+    // If mismatch, use server date/time
+    const finalTimestamp = useServerTimestamp
+      ? now.toISOString().replace('T', ' ').slice(0, 19) // "YYYY-MM-DD HH:MM:SS"
+      : incomingTimestamp;
 
     const docRef = db
       .collection("locationhistory")
@@ -147,15 +166,21 @@ app.post("/esp8266/upload", async (req, res) => {
       .collection("entries")
       .doc(time);
 
-    await docRef.set({
-      Latitude: data.location.latitude,
-      Longitude: data.location.longitude,
-      Distance: data.distance,
-      Timestamp: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    // Build the Firestore document, only including defined fields
+    const docData = {
+      ServerTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    if (data?.location?.latitude !== undefined) docData.Latitude = data.location.latitude;
+    if (data?.location?.longitude !== undefined) docData.Longitude = data.location.longitude;
+    if (data?.location?.speed !== undefined) docData.Speed = data.location.speed;
+    docData.Timestamp = finalTimestamp; // Always set, either from NodeMCU or server
+    if (data?.distance !== undefined) docData.Distance = data.distance;
+    if (data?.totalDistance !== undefined) docData.TotalDistance = data.totalDistance;
+    if (data?.dailyDistance !== undefined) docData.DailyDistance = data.dailyDistance;
 
-    console.log(`[ESP8266] Location data saved: (${data.location.latitude}, ${data.location.longitude})`);
-    
+    await docRef.set(docData);
+
+    console.log(`[ESP8266] Location data saved: (${docData.Latitude}, ${docData.Longitude})`);
     res.status(200).send("Data uploaded successfully!");
   } catch (error) {
     console.error("[ESP8266] Error:", error);
