@@ -30,6 +30,17 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(express.json());
 
+// Apply performance optimizations if in production
+if (process.env.NODE_ENV === 'production') {
+  try {
+    const { setupOptimizations } = require('./optimization_middleware');
+    const optimizations = setupOptimizations(app);
+    console.log('✅ Production optimizations applied');
+  } catch (error) {
+    console.warn('⚠️ Could not load optimizations:', error.message);
+  }
+}
+
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(__dirname, 'Bus tracking Admin/Admin/Backend/uploads')));
 

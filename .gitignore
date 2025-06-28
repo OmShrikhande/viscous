@@ -11,11 +11,9 @@ Backend/Bus tracking Admin/Admin/node_modules/
 # Backend sensitive files
 Backend/Esp8266 server/serviceAccountKey.json
 Backend/**/serviceAccountKey.json
-Backend/**/firebase.js
-Backend/**/firebaseConfig.js
 Backend/**/*.env
 Backend/**/.env*
-Backend/**/config/*.js
+
 viscous/Backend/Bustracking Admin/Admin/Backend/FetchBusLocation.ps1
 # Backend logs and runtime data
 Backend/**/logs
@@ -77,4 +75,3 @@ app.config.js
 app.json
 debug-auth.js
 auth*
-FirebaseConfigs.js

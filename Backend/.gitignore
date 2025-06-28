@@ -41,3 +41,17 @@ pids
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+.venv/
+.vscode/
+.idea/
+.Environment/
+.env.example
+*.py
+# Python
+__pycache__/
+*.pyc
+*.pyo
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+*.md
