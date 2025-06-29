@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { onValue, ref } from 'firebase/database';
 import { useEffect, useState } from 'react';
-import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { realtimeDatabase } from '../../configs/FirebaseConfigs';
 
-const BusCapacityIndicator = ({ isDark, routeNumber }) => {
+const BusCapacityIndicator = ({ isDark, routeNumber, refreshing }) => {
   const [capacity, setCapacity] = useState({
     current: 0,
     total: 40, // Default total capacity
@@ -13,7 +13,50 @@ const BusCapacityIndicator = ({ isDark, routeNumber }) => {
   });
   const [seatAvailability, setSeatAvailability] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [manualRefreshing, setManualRefreshing] = useState(false);
   const progressAnim = useState(new Animated.Value(0))[0];
+
+  // Manual refresh function
+  const handleManualRefresh = async () => {
+    setManualRefreshing(true);
+    try {
+      console.log('🔄 Manual refresh triggered for BusCapacityIndicator');
+      
+      // Reset states
+      setCapacity({
+        current: 0,
+        total: 40,
+        percentage: 0,
+        lastUpdated: null
+      });
+      setSeatAvailability([]);
+      setLoading(true);
+      
+      // Animate progress bar back to 0
+      Animated.timing(progressAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: false
+      }).start();
+      
+      // Small delay to show loading state
+      setTimeout(() => {
+        setManualRefreshing(false);
+      }, 1500);
+      
+    } catch (error) {
+      console.error('Error during manual refresh:', error);
+      setManualRefreshing(false);
+    }
+  };
+
+  // Handle refresh from parent component
+  useEffect(() => {
+    if (refreshing && !manualRefreshing) {
+      console.log('🔄 Parent refresh detected for BusCapacityIndicator');
+      handleManualRefresh();
+    }
+  }, [refreshing]);
 
   useEffect(() => {
     if (!routeNumber) return;
@@ -166,9 +209,31 @@ const BusCapacityIndicator = ({ isDark, routeNumber }) => {
               Bus Capacity
             </Text>
           </View>
-          <Text style={[styles.updateTime, { color: secondaryTextColor }]}>
-            Updated: {formatLastUpdated()}
-          </Text>
+          <View style={styles.headerRight}>
+            <Text style={[styles.updateTime, { color: secondaryTextColor }]}>
+              Updated: {formatLastUpdated()}
+            </Text>
+            <TouchableOpacity 
+              style={[
+                styles.refreshButton, 
+                { 
+                  backgroundColor: isDark ? '#333' : '#e0e0e0',
+                  opacity: (manualRefreshing || refreshing) ? 0.6 : 1
+                }
+              ]}
+              onPress={handleManualRefresh}
+              disabled={manualRefreshing || refreshing}
+            >
+              <Ionicons 
+                name="refresh" 
+                size={16} 
+                color={getCapacityColor()} 
+                style={{
+                  transform: [{ rotate: (manualRefreshing || refreshing) ? '360deg' : '0deg' }]
+                }}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
         
         {/* Capacity Bar */}
@@ -255,9 +320,23 @@ const styles = StyleSheet.create({
     fontFamily: 'flux-bold',
     marginLeft: 8,
   },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   updateTime: {
     fontSize: 12,
     fontFamily: 'flux',
+  },
+  refreshButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
   capacityBarContainer: {
     height: 12,

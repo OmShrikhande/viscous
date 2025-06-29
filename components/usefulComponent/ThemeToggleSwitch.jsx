@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { Alert, Dimensions, StyleSheet, Switch,View } from 'react-native';
+import { Alert, Dimensions, StyleSheet, Switch, View } from 'react-native';
 import Animated, {
     Easing,
     interpolateColor,
@@ -51,16 +51,22 @@ const ThemeToggleSwitch = ({ currentValue, userEmail, onToggle }) => {
 
     try {
       // Update AsyncStorage first for immediate local persistence
+      console.log('🎨 ThemeToggle: Updating AsyncStorage with isDark:', newValue);
       const storedData = await AsyncStorage.getItem('userData');
       if (storedData) {
         const parsed = JSON.parse(storedData);
         parsed.isDark = newValue;
         await AsyncStorage.setItem('userData', JSON.stringify(parsed));
+        console.log('🎨 ThemeToggle: AsyncStorage updated successfully');
+      } else {
+        console.warn('🎨 ThemeToggle: No userData found in AsyncStorage');
       }
 
       // Then update Firestore (can happen in background)
+      console.log('🎨 ThemeToggle: Updating Firestore with isDark:', newValue, 'for user:', userEmail);
       const docRef = doc(db, 'userdata', userEmail);
       await updateDoc(docRef, { isDark: newValue });
+      console.log('🎨 ThemeToggle: Firestore updated successfully');
 
       // Show success message
       Alert.alert('Theme Updated', `Switched to ${newValue ? 'Dark' : 'Light'} Mode`);

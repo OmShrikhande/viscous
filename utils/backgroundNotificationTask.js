@@ -172,7 +172,7 @@ TaskManager.defineTask(BUS_NOTIFICATION_TASK, async () => {
             type: notificationType,
             timestamp: new Date().toISOString()
           },
-          trigger: { seconds: 1 },
+          trigger: null, // Use null for immediate delivery
           priority: 'high',
           ongoing: notificationType === 'arrived',
           badge: 1
@@ -195,19 +195,47 @@ TaskManager.defineTask(BUS_NOTIFICATION_TASK, async () => {
   }
 });
 
-// Register the background task
+// Register the background task with improved error handling
 export const registerBusNotificationTask = async () => {
   try {
+    // Check if task is already registered to avoid duplicate registration errors
+    const isRegistered = await TaskManager.isTaskRegisteredAsync(BUS_NOTIFICATION_TASK)
+      .catch(err => {
+        console.log('Error checking task registration:', err);
+        return false;
+      });
+    
+    if (isRegistered) {
+      console.log('Background notification task already registered');
+      return true;
+    }
+    
+    // Register the task with safer options
     await BackgroundFetch.registerTaskAsync(BUS_NOTIFICATION_TASK, {
       minimumInterval: 5 * 60, // 5 minutes
-      stopOnTerminate: false,
-      startOnBoot: true,
+      stopOnTerminate: false,  // This might cause issues on some devices
+      startOnBoot: true,       // This might cause issues on some devices
     });
-    console.log('Registered background notification task');
+    
+    console.log('Registered background notification task successfully');
     return true;
   } catch (error) {
     console.error('Failed to register background notification task:', error);
-    return false;
+    
+    // Try with more conservative options if the first attempt fails
+    try {
+      console.log('Trying with conservative background task options...');
+      await BackgroundFetch.registerTaskAsync(BUS_NOTIFICATION_TASK, {
+        minimumInterval: 15 * 60, // 15 minutes (more battery friendly)
+        stopOnTerminate: true,    // Less likely to cause issues
+        startOnBoot: false,       // Less likely to cause issues
+      });
+      console.log('Registered background task with conservative options');
+      return true;
+    } catch (fallbackError) {
+      console.error('Failed to register even with conservative options:', fallbackError);
+      return false;
+    }
   }
 };
 

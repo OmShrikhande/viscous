@@ -1,10 +1,10 @@
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as BackgroundFetch from 'expo-background-fetch';
+import { BlurView } from 'expo-blur';
+import * as TaskManager from 'expo-task-manager';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Switch, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { firestoreDb } from '../../configs/FirebaseConfigs';
 import { BACKGROUND_SPEED_MONITOR_TASK, registerBackgroundTasks } from '../../utils/backgroundTasks';
@@ -64,7 +64,7 @@ const SpeedMonitoringToggle = ({ isDark, userEmail }) => {
         console.log('Enabling background speed monitoring task');
         
         // Check if task is already registered
-        const tasks = await BackgroundFetch.getRegisteredTasksAsync();
+        const tasks = await TaskManager.getRegisteredTasksAsync();
         const isRegistered = tasks.some(task => task.taskName === BACKGROUND_SPEED_MONITOR_TASK);
         
         if (!isRegistered) {

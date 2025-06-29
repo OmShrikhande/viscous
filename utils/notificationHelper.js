@@ -33,8 +33,8 @@ if (Platform.OS === 'android') {
  */
 export const requestNotificationPermissions = async () => {
   if (!Device.isDevice) {
-    console.warn("Using an emulator for notifications - some features may not work properly");
-    // Continue anyway for testing purposes
+    console.warn("Must use a real device for notifications!");
+    return false;
   }
 
   console.log("🔐 Requesting notification permissions...");
@@ -144,11 +144,6 @@ export const getExpoPushToken = async () => {
     
     if (!isDevBuild && Platform.OS === 'android') {
       console.warn("Push notifications require a development build on Android");
-      // For emulator testing, we'll continue anyway but with a mock token
-      if (!Device.isDevice) {
-        console.log("Using mock push token for emulator testing");
-        return "EMULATOR-MOCK-TOKEN-" + Math.random().toString(36).substring(2, 10);
-      }
       return null;
     }
     
@@ -188,12 +183,6 @@ export const sendLocalNotification = async (title, body, options = {}) => {
   try {
     console.log("🔔 Sending notification:", title, body);
     
-    // Special handling for emulators
-    const isEmulator = !Device.isDevice;
-    if (isEmulator) {
-      console.log("📱 Running on emulator - using special notification handling");
-    }
-    
     // Create a notification channel for Android with high importance
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('bus-tracker', {
@@ -223,7 +212,7 @@ export const sendLocalNotification = async (title, body, options = {}) => {
         color: '#0a7ea4',
         vibrationPattern: [0, 250, 250, 250],
         autoDismiss: false, // Don't auto dismiss the notification
-        sticky: true, // Make it sticky until user interacts
+        sticky: false, // Make it sticky until user interacts
         ongoing: options.ongoing || false, // Set to true for persistent notifications
         priority: 'max', // Maximum priority
         icon: 'ic_notification',
@@ -240,8 +229,7 @@ export const sendLocalNotification = async (title, body, options = {}) => {
     };
 
     // For immediate notifications, use a very short delay to ensure they appear in the system tray
-    // For emulators, use an even shorter delay to ensure notifications appear
-    const trigger = options.trigger || (!Device.isDevice ? { seconds: 0.5 } : { seconds: 1 });
+    const trigger = options.trigger || { seconds: 1 };
 
     // Schedule the notification
     const notificationId = await Notifications.scheduleNotificationAsync({

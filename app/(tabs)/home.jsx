@@ -1,9 +1,8 @@
 import { Ionicons, MaterialIcons } from '@expo/vector-icons'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { doc, onSnapshot } from 'firebase/firestore'
-import { useEffect, useRef, useState } from 'react'
-import { registerListener, useListenerStatus } from '../../utils/firebaseListenerManager'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Animated, RefreshControl, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import BusCapacityIndicator from '../../components/home/BusCapacityIndicator'
 import BusStopNotifications from '../../components/home/BusStopNotifications'
@@ -13,6 +12,7 @@ import TrackingManager from '../../components/tracking/TrackingManager'
 import UserDataManager from '../../components/usefulComponent/UserDataManager'
 import { firestoreDb } from '../../configs/FirebaseConfigs'
 import { Colors } from '../../constants/Colors'
+import { registerListener } from '../../utils/firebaseListenerManager'
 import { initializeNotifications } from '../../utils/notificationHelper'
 
 export default function  Home() {
@@ -40,6 +40,10 @@ export default function  Home() {
         setUserEmail(userData.email);
         setUserRouteNumber(userData.routeNumber || '');
         
+        // Set initial theme from AsyncStorage
+        console.log('🎨 Initial theme from AsyncStorage:', userData.isDark);
+        setIsDark(userData.isDark === true || userData.isDark === 'true');
+        
         if (!userData.email) {
           console.warn('⚠️ Email not found inside userData');
           return;
@@ -49,7 +53,25 @@ export default function  Home() {
         const userDataListener = onSnapshot(userDocRef, (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
-            setIsDark(data.isDark === true);
+            console.log('🎨 Firestore theme data received:', data.isDark);
+            
+            // More flexible theme checking - also check for boolean false explicitly
+            const newDarkMode = data.isDark === true || data.isDark === 'true';
+            if (newDarkMode !== isDark) {
+              console.log('🎨 Theme changed in Firestore, updating from', isDark, 'to', newDarkMode);
+              setIsDark(newDarkMode);
+              
+              // Also update AsyncStorage to keep it in sync
+              AsyncStorage.getItem('userData').then(storedData => {
+                if (storedData) {
+                  const parsedData = JSON.parse(storedData);
+                  AsyncStorage.setItem('userData', JSON.stringify({
+                    ...parsedData,
+                    isDark: newDarkMode
+                  }));
+                }
+              });
+            }
             
             // Update route number if it exists in Firestore
             if (data.routeNumber && data.routeNumber !== userRouteNumber) {
@@ -66,6 +88,8 @@ export default function  Home() {
               });
             }
           }
+        }, (error) => {
+          console.error('❌ Firestore listener error in home:', error);
         });
         
         // Register with our listener manager
@@ -75,7 +99,8 @@ export default function  Home() {
           'foreground' // Only needed when home screen is visible
         );
         
-        return () => unregisterUserDataListener();
+        // Store the unregister function for cleanup
+        return unregisterUserDataListener;
       } catch (err) {
         console.error('Failed to fetch user data:', err);
       }
@@ -90,7 +115,53 @@ export default function  Home() {
     import('../../utils/backgroundTasks').then(module => {
       module.registerBackgroundTasks();
     });
-  }, []);
+    
+    // Fallback: Check AsyncStorage for theme changes every 3 seconds
+    // This helps if Firestore listener fails
+    const themeCheckInterval = setInterval(async () => {
+      try {
+        const userDataJson = await AsyncStorage.getItem('userData');
+        if (userDataJson) {
+          const userData = JSON.parse(userDataJson);
+          const storedTheme = userData.isDark === true || userData.isDark === 'true';
+          if (storedTheme !== isDark) {
+            console.log('🎨 Fallback: Theme change detected in AsyncStorage, updating to:', storedTheme);
+            setIsDark(storedTheme);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking theme from AsyncStorage:', error);
+      }
+    }, 3000);
+    
+    return () => {
+      clearInterval(themeCheckInterval);
+    };
+  }, [isDark]);
+
+  // Refresh theme when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      const checkThemeOnFocus = async () => {
+        try {
+          console.log('🎨 Home screen focused, checking theme...');
+          const userDataJson = await AsyncStorage.getItem('userData');
+          if (userDataJson) {
+            const userData = JSON.parse(userDataJson);
+            const storedTheme = userData.isDark === true || userData.isDark === 'true';
+            if (storedTheme !== isDark) {
+              console.log('🎨 Focus: Theme change detected, updating to:', storedTheme);
+              setIsDark(storedTheme);
+            }
+          }
+        } catch (error) {
+          console.error('Error checking theme on focus:', error);
+        }
+      };
+      
+      checkThemeOnFocus();
+    }, [isDark])
+  );
 
   // Animation when component mounts
   useEffect(() => {
@@ -122,7 +193,7 @@ export default function  Home() {
   };
 
   const handleMapViewPress = () => {
-    router.push('/map');
+    router.push('/(tabs)/map');
   };
 
   const renderTabContent = () => {
@@ -137,8 +208,8 @@ export default function  Home() {
           >
             <BusStopNotifications isDark={isDark} />
             <TrackingManager isDark={isDark} />
-            <BusStopTimeline isDark={isDark} />
-            <BusCapacityIndicator isDark={isDark} routeNumber={userRouteNumber} />
+            <BusStopTimeline isDark={isDark} refreshing={refreshing} />
+            <BusCapacityIndicator isDark={isDark} routeNumber={userRouteNumber} refreshing={refreshing} />
           </Animated.View>
         );
       case 'map':

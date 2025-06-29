@@ -1,11 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as BackgroundFetch from 'expo-background-fetch';
+import * as TaskManager from 'expo-task-manager';
+import { onValue, ref } from 'firebase/database';
 import { useEffect, useRef, useState } from 'react';
+import { realtimeDatabase } from '../../configs/FirebaseConfigs';
+import { BACKGROUND_SPEED_MONITOR_TASK, registerBackgroundTasks } from '../../utils/backgroundTasks';
 import { initializeNotifications, requestNotificationPermissions } from '../../utils/notificationHelper';
 import { isSpeedMonitoringEnabled, monitorSpeed } from '../../utils/speedMonitor';
-import { registerBackgroundTasks, BACKGROUND_SPEED_MONITOR_TASK } from '../../utils/backgroundTasks';
-import * as BackgroundFetch from 'expo-background-fetch';
-import { onValue, ref } from 'firebase/database';
-import { realtimeDatabase } from '../../configs/FirebaseConfigs';
 
 /**
  * Invisible component that monitors bus speed and sends notifications when speed exceeds threshold
@@ -39,7 +40,7 @@ const SpeedMonitor = ({ speed, threshold = 65 }) => {
             await registerBackgroundTasks();
             
             // Check if the speed monitoring task is registered
-            const tasks = await BackgroundFetch.getRegisteredTasksAsync();
+            const tasks = await TaskManager.getRegisteredTasksAsync();
             const isRegistered = tasks.some(task => task.taskName === BACKGROUND_SPEED_MONITOR_TASK);
             
             if (isRegistered) {

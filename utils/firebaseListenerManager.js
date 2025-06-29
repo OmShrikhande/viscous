@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppState } from 'react-native';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
+import { AppState } from 'react-native';
 
 // Constants
 const LISTENER_MANAGER_TASK = 'firebase-listener-manager-task';
@@ -176,14 +176,17 @@ TaskManager.defineTask(LISTENER_MANAGER_TASK, async () => {
   }
 });
 
+// Store AppState subscription
+let appStateSubscription = null;
+
 // Initialize the listener manager
 export const initListenerManager = async () => {
   // Set initial active hours status
   isWithinActiveHours = checkActiveHours();
   console.log(`Initializing listener manager. Active hours: ${isWithinActiveHours}`);
   
-  // Register app state change listener
-  AppState.addEventListener('change', handleAppStateChange);
+  // Register app state change listener using subscription pattern
+  appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
   
   // Register background task
   try {
@@ -199,24 +202,66 @@ export const initListenerManager = async () => {
   
   // Return cleanup function
   return () => {
+    try {
+      // Unsubscribe all listeners
+      Object.keys(activeListeners).forEach(type => {
+        activeListeners[type].forEach((unsubscribe, id) => {
+          if (typeof unsubscribe === 'function') {
+            unsubscribe();
+            console.log(`Unsubscribed ${type} listener: ${id}`);
+          }
+        });
+        activeListeners[type].clear();
+      });
+      
+      // Remove app state listener using subscription pattern
+      if (appStateSubscription) {
+        appStateSubscription.remove();
+        appStateSubscription = null;
+        console.log('Removed AppState listener');
+      }
+      
+      // Unregister background task
+      BackgroundFetch.unregisterTaskAsync(LISTENER_MANAGER_TASK)
+        .catch(error => console.error('Failed to unregister background task:', error));
+        
+    } catch (error) {
+      console.error('Error during Firebase listener cleanup:', error);
+    }
+  };
+};
+
+// Cleanup all listeners (useful for logout or app termination)
+export const cleanupAllListeners = () => {
+  try {
+    console.log('🧹 Cleaning up all Firebase listeners...');
+    
     // Unsubscribe all listeners
     Object.keys(activeListeners).forEach(type => {
       activeListeners[type].forEach((unsubscribe, id) => {
         if (typeof unsubscribe === 'function') {
-          unsubscribe();
-          console.log(`Unsubscribed ${type} listener: ${id}`);
+          try {
+            unsubscribe();
+            console.log(`✅ Unsubscribed ${type} listener: ${id}`);
+          } catch (error) {
+            console.error(`❌ Error unsubscribing ${type} listener ${id}:`, error);
+          }
         }
       });
       activeListeners[type].clear();
     });
     
     // Remove app state listener
-    AppState.removeEventListener('change', handleAppStateChange);
+    if (appStateSubscription) {
+      appStateSubscription.remove();
+      appStateSubscription = null;
+      console.log('✅ Removed AppState listener');
+    }
     
-    // Unregister background task
-    BackgroundFetch.unregisterTaskAsync(LISTENER_MANAGER_TASK)
-      .catch(error => console.error('Failed to unregister background task:', error));
-  };
+    console.log('🧹 All Firebase listeners cleaned up successfully');
+  } catch (error) {
+    console.error('❌ Error during Firebase listener cleanup:', error);
+  }
 };
 
 // Hook to check if listeners should be active

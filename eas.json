@@ -3,11 +3,21 @@
     "preview": {
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_bmVhdC1wb255LTYyLmNsZXJrLmFjY291bnRzLmRldiQ",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyB-R6ylNbXSAA_4E5AxKQfcYWiElba_PIc",
+        "GOOGLE_MAPS_API_KEY": "AIzaSyB-R6ylNbXSAA_4E5AxKQfcYWiElba_PIc"
       }
     },
     "preview2": {
       "android": {
         "gradleCommand": ":app:assembleRelease"
+      },
+      "env": {
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_bmVhdC1wb255LTYyLmNsZXJrLmFjY291bnRzLmRldiQ",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyB-R6ylNbXSAA_4E5AxKQfcYWiElba_PIc",
+        "GOOGLE_MAPS_API_KEY": "AIzaSyB-R6ylNbXSAA_4E5AxKQfcYWiElba_PIc"
       }
     },
     "preview3": {
@@ -16,6 +26,28 @@
     "preview4": {
       "distribution": "internal"
     },
-    "production": {}
+    "local": {
+      "android": {
+        "buildType": "apk",
+        "distribution": "internal",
+        "withoutCredentials": true
+      },
+      "env": {
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_bmVhdC1wb255LTYyLmNsZXJrLmFjY291bnRzLmRldiQ",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyB-R6ylNbXSAA_4E5AxKQfcYWiElba_PIc",
+        "GOOGLE_MAPS_API_KEY": "AIzaSyB-R6ylNbXSAA_4E5AxKQfcYWiElba_PIc"
+      }
+    },
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_bmVhdC1wb255LTYyLmNsZXJrLmFjY291bnRzLmRldiQ",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyB-R6ylNbXSAA_4E5AxKQfcYWiElba_PIc",
+        "GOOGLE_MAPS_API_KEY": "AIzaSyB-R6ylNbXSAA_4E5AxKQfcYWiElba_PIc"
+      }
+    }
+  },
+  "cli": {
+    "version": ">= 5.9.1",
+    "requireCommit": false
   }
 }

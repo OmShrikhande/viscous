@@ -307,8 +307,8 @@ export default function BusStopNotifications({ isDark }) {
             type: type,
             timestamp: new Date().toISOString() // Add timestamp for uniqueness
           },
-          // Use a small delay to ensure notification is processed properly
-          trigger: { seconds: 1 },
+          // Use null trigger for immediate delivery
+          trigger: null,
           // Set priority options for better background delivery
           priority: 'high',
           ongoing: type === 'arrived', // Make "arrived" notifications persistent

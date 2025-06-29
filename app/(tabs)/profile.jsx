@@ -24,6 +24,7 @@ import Animated, {
   withTiming
 } from 'react-native-reanimated';
 
+import ConnectionStatus from '../../components/ConnectionStatus';
 import BusNotificationsToggle from '../../components/Profile/BusNotificationsToggle';
 import EditProfileForm from '../../components/Profile/EditProfileForm';
 import MenuList from '../../components/Profile/MenuList';
@@ -119,31 +120,65 @@ export default function Profile() {
     
     // Cleanup function to reset animation values when component unmounts
     return () => {
-      // Reset animation values to prevent errors during unmount
-      avatarScale.value = 1;
-      cardOpacity.value = 0;
-      profileInfoY.value = 0;
+      try {
+        // Reset animation values to prevent errors during unmount
+        if (avatarScale && typeof avatarScale.value !== 'undefined') {
+          avatarScale.value = 1;
+        }
+        if (cardOpacity && typeof cardOpacity.value !== 'undefined') {
+          cardOpacity.value = 0;
+        }
+        if (profileInfoY && typeof profileInfoY.value !== 'undefined') {
+          profileInfoY.value = 0;
+        }
+      } catch (cleanupError) {
+        console.warn('Cleanup animation error (non-critical):', cleanupError);
+      }
     };
   }, [isLoading, avatarScale, cardOpacity, profileInfoY]);
   
-  // Animated styles with safety checks
+  // Animated styles with improved safety checks
   const avatarAnimatedStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ scale: avatarScale.value ?? 1 }],
-    };
+    try {
+      const scale = typeof avatarScale.value === 'number' && !isNaN(avatarScale.value) ? avatarScale.value : 1;
+      return {
+        transform: [{ scale: Math.max(0.1, Math.min(2, scale)) }], // Constrain scale
+      };
+    } catch (error) {
+      return {
+        transform: [{ scale: 1 }],
+      };
+    }
   });
   
   const cardAnimatedStyle = useAnimatedStyle(() => {
-    return {
-      opacity: cardOpacity.value ?? 0,
-    };
+    try {
+      const opacity = typeof cardOpacity.value === 'number' && !isNaN(cardOpacity.value) ? cardOpacity.value : 0;
+      return {
+        opacity: Math.max(0, Math.min(1, opacity)), // Constrain opacity
+      };
+    } catch (error) {
+      return {
+        opacity: 0,
+      };
+    }
   });
   
   const profileInfoAnimatedStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ translateY: profileInfoY.value ?? 0 }],
-      opacity: cardOpacity.value ?? 0,
-    };
+    try {
+      const translateY = typeof profileInfoY.value === 'number' && !isNaN(profileInfoY.value) ? profileInfoY.value : 0;
+      const opacity = typeof cardOpacity.value === 'number' && !isNaN(cardOpacity.value) ? cardOpacity.value : 0;
+      
+      return {
+        transform: [{ translateY: Math.max(-1000, Math.min(1000, translateY)) }], // Constrain translateY
+        opacity: Math.max(0, Math.min(1, opacity)), // Constrain opacity
+      };
+    } catch (error) {
+      return {
+        transform: [{ translateY: 0 }],
+        opacity: 0,
+      };
+    }
   });
 
   const handleProfileUpdate = (updatedData) => {
@@ -370,6 +405,14 @@ export default function Profile() {
               
               <Animated.View style={styles.testNotificationsContainer}>
                 <TestNotifications isDark={isDark} />
+                
+                {/* Connection Status */}
+                <Animated.View
+                  entering={FadeIn.duration(500).delay(950)}
+                  style={styles.connectionStatusContainer}
+                >
+                  <ConnectionStatus isDark={isDark} showDetailedStatus={true} />
+                </Animated.View>
               </Animated.View>
             </Animated.View>
 
@@ -572,6 +615,9 @@ const styles = StyleSheet.create({
   },
   testNotificationsContainer: {
     marginTop: 5,
+  },
+  connectionStatusContainer: {
+    marginTop: 10,
   },
   footerContainer: {
     marginTop: 30,

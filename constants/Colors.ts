@@ -30,7 +30,7 @@ export const Colors = {
   WHITE:'#FFFFFF',
   BLACK:'#000000',
   LIGHT:'#EB8A90',
-  Appname:'Bus Tracker',
+  Appname:'Viscous',
   Creator:'Om Shrikhande',
   BORDER:'#edbc09',
   SUCCESS: '#28a745', // Green for reached stop

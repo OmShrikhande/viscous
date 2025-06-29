@@ -1,47 +1,46 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, Image, StyleSheet } from 'react-native';
-import { Redirect, useNavigation } from "expo-router";
-// Import LinearGradient for the background
 import { Colors } from '@/constants/Colors';
-
+import { useAuth } from '@clerk/clerk-expo';
+import { Redirect, useNavigation } from "expo-router";
+import React, { useEffect, useState } from 'react';
+import { Image, StyleSheet, Text, View } from 'react-native';
 
 export default function Index() {
   const [isLoading, setIsLoading] = useState(true);
-  const navigation = useNavigation(); // Typed navigation
+  const navigation = useNavigation();
+  const { isSignedIn, isLoaded } = useAuth();
 
   useEffect(() => {
     // Hide the header when this screen is active
     navigation.setOptions({
-      headerShown: false, // Hide the header
+      headerShown: false,
     });
 
-    // Set a timeout for 1 second before redirecting
+    // Wait for auth to load, then show splash for a short time
     const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 2000); // Delay of 1 second (1000ms)
+      if (isLoaded) { // Only finish loading when auth state is known
+        setIsLoading(false);
+      }
+    }, 1500); // Reduced to 1.5 seconds
 
     // Clean up the timer
     return () => clearTimeout(timer);
-  }, [navigation]);
+  }, [navigation, isLoaded]);
 
-  if (!isLoading) {
-    // Once loading is finished, redirect to the home page
-    return <Redirect href={'/home'} />;
+  // Show splash screen while loading or auth is not ready
+  if (isLoading || !isLoaded) {
+    return (
+      <View style={styles.container}>
+        <Image
+          source={require('../assets/images/bustrackerlogo.png')}
+          style={styles.logo}
+        />
+        <Text style={styles.appName}>{Colors.Appname}</Text>
+      </View>
+    );
   }
 
-  return (
-    <View
-    // Gradient colors
-      style={styles.container}
-    >
-      {/* Replace this with your own cool graphic, logo, or animation */}
-      <Image
-        source={require('../assets/images/bustrackerlogo.png')} // Make sure to replace with your logo path
-        style={styles.logo}
-      />
-      <Text style={styles.appName}>{Colors.Appname}</Text>
-</View>
-  );
+  // Always redirect to tabs route - _layout.jsx will handle showing LoginScreen or Home based on auth
+  return <Redirect href="/(tabs)/home" />;
 }
 
 const styles = StyleSheet.create({

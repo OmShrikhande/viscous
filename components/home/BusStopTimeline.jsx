@@ -14,10 +14,10 @@ import {
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { firestoreDb, realtimeDatabase } from '../../configs/FirebaseConfigs';
-import { registerListener } from '../../utils/firebaseListenerManager';
 import { checkFirestoreConnection, handleFirestoreError } from '../../utils/firebaseConnectionCheck';
+import { registerListener } from '../../utils/firebaseListenerManager';
 
-const BusStopTimeline = ({ isDark }) => {
+const BusStopTimeline = ({ isDark, refreshing }) => {
   const [userRouteNumber, setUserRouteNumber] = useState('');
   const [userBusStop, setUserBusStop] = useState('');
   const [routeStops, setRouteStops] = useState([]);
@@ -28,6 +28,226 @@ const BusStopTimeline = ({ isDark }) => {
   const [error, setError] = useState(null);
   const [stopListeners, setStopListeners] = useState([]);
   const [connectionStatus, setConnectionStatus] = useState(true);
+  const [manualRefreshing, setManualRefreshing] = useState(false);
+
+  // Extract route loading logic into a reusable function
+  const loadRouteStopsData = async (routeNumber) => {
+    try {
+      setIsLoading(true);
+      
+      // Check connection first
+      const isConnected = await checkFirestoreConnection();
+      setConnectionStatus(isConnected);
+      
+      if (!isConnected) {
+        setError('Firebase connection issue. Please check your internet connection and try again.');
+        setIsLoading(false);
+        return;
+      }
+      
+      const routeRef = collection(firestoreDb, `Route${routeNumber}`);
+      const stopsSnapshot = await getDocs(routeRef);
+      
+      if (stopsSnapshot.empty) {
+        console.log(`No stops found for route ${routeNumber}`);
+        setRouteStops([]);
+        setError(`No stops found for route ${routeNumber}`);
+      } else {
+        // Get all stop names and sort them in order
+        const stops = stopsSnapshot.docs.map(doc => ({
+          name: doc.id,
+          data: doc.data()
+        }));
+        
+        // Sort stops by serialNumber if available, then by order as fallback
+        const sortedStops = stops.sort((a, b) => {
+          // First try to sort by serialNumber
+          if (a.data.serialNumber !== undefined && b.data.serialNumber !== undefined) {
+            return a.data.serialNumber - b.data.serialNumber;
+          }
+          // Fall back to order if serialNumber is not available
+          else if (a.data.order !== undefined && b.data.order !== undefined) {
+            return a.data.order - b.data.order;
+          }
+          return 0;
+        });
+        
+        setRouteStops(sortedStops);
+        
+        // Set up listeners for each stop's reached status
+        const listeners = [];
+        
+        // Clean up any existing listeners
+        stopListeners.forEach(unsubscribe => unsubscribe());
+        
+        // Create a single listener for the entire route collection
+        const routeRef = collection(firestoreDb, `Route${routeNumber}`);
+        const routeListener = onSnapshot(routeRef, (snapshot) => {
+          try {
+            console.log(`Received snapshot for Route${routeNumber} with ${snapshot.docs.length} documents`);
+            
+            // Process all changes in a batch for better performance
+            const updatedStops = {};
+            let highestReachedIndex = -1;
+            
+            // Log all stops with reached status for debugging
+            const reachedStopsDebug = [];
+            
+            snapshot.docs.forEach(doc => {
+              try {
+                const stopData = doc.data();
+                const stopName = doc.id;
+                
+                // Log each stop's reached status for debugging
+                console.log(`Stop ${stopName} data:`, JSON.stringify({
+                  reached: stopData.reached,
+                  reachedTime: stopData.reachedTime,
+                  serialNumber: stopData.serialNumber || stopData.order || 0
+                }));
+                
+                // Check for reached status in multiple ways to be more flexible
+                const isReached = 
+                  stopData.reached === true || 
+                  stopData.reached === 'true' || 
+                  stopData.reached === 1 ||
+                  stopData.reached === '1' ||
+                  stopData.isReached === true ||
+                  stopData.isReached === 'true';
+                
+                if (isReached) {
+                  reachedStopsDebug.push(stopName);
+                  console.log(`Stop ${stopName} is marked as reached!`);
+                }
+                
+                // Always process the stop, even if reached is undefined
+                updatedStops[stopName] = {
+                  reached: isReached,
+                  time: stopData.reachedTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                };
+                
+                // If this stop is reached, track its index
+                if (isReached) {
+                  const stopIndex = sortedStops.findIndex(s => s.name === stopName);
+                  console.log(`Found reached stop ${stopName} at index ${stopIndex}`);
+                  if (stopIndex > highestReachedIndex) {
+                    highestReachedIndex = stopIndex;
+                    console.log(`New highest reached index: ${highestReachedIndex}`);
+                  }
+                }
+              } catch (docError) {
+                console.error(`Error processing stop document:`, docError);
+              }
+            });
+            
+            // Log reached stops for debugging
+            if (reachedStopsDebug.length > 0) {
+              console.log(`Reached stops in this snapshot: ${reachedStopsDebug.join(', ')}`);
+            } else {
+              console.log('No reached stops found in this snapshot');
+            }
+            
+            // Update all reached stops at once for better performance
+            if (Object.keys(updatedStops).length > 0) {
+              console.log(`Updating ${Object.keys(updatedStops).length} stops from Firestore`);
+              
+              // Log which stops are marked as reached
+              const reachedStopNames = Object.keys(updatedStops)
+                .filter(name => updatedStops[name].reached)
+                .join(', ');
+                
+              console.log(`Stops marked as reached: ${reachedStopNames || 'None'}`);
+              
+              setReachedStops(updatedStops);
+              
+              // Update current stop index if needed
+              if (highestReachedIndex > currentStopIndex) {
+                console.log(`Updating current stop index to ${highestReachedIndex}`);
+                setCurrentStopIndex(highestReachedIndex);
+              } else {
+                console.log(`Current stop index remains at ${currentStopIndex}, highest reached is ${highestReachedIndex}`);
+              }
+            }
+          } catch (snapshotError) {
+            console.error(`Error processing snapshot for route ${routeNumber}:`, snapshotError);
+          }
+        }, async error => {
+          console.error(`Error listening to route ${routeNumber}:`, error);
+          // Try to provide more details about the error
+          console.error(`Error details: ${error.code} - ${error.message}`);
+          
+          // Check if it's a connection error
+          const isConnectionError = await handleFirestoreError(error);
+          if (isConnectionError) {
+            setConnectionStatus(false);
+            setError('Firebase connection issue. Please check your internet connection.');
+          }
+        });
+        
+        // Register with our listener manager - use background type for better reliability
+        const unregisterRouteListener = registerListener(
+          `timeline-route-${routeNumber}`,
+          routeListener,
+          'background' // Use background type to ensure it keeps working even when not directly visible
+        );
+        
+        listeners.push(unregisterRouteListener);
+        
+        setStopListeners(listeners);
+        setError(null);
+        console.log(`Loaded ${sortedStops.length} stops for route ${routeNumber} and set up listeners`);
+      }
+    } catch (error) {
+      console.error('Error loading route stops:', error);
+      setRouteStops([]);
+      setError('Failed to load route stops');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Manual refresh function
+  const handleManualRefresh = async () => {
+    setManualRefreshing(true);
+    try {
+      console.log('🔄 Manual refresh triggered for BusStopTimeline');
+      
+      // Clear current data
+      setRouteStops([]);
+      setReachedStops({});
+      setCurrentStopIndex(-1);
+      setBusLocation(null);
+      setError(null);
+      
+      // Clean up existing listeners
+      stopListeners.forEach(unsubscribe => unsubscribe());
+      setStopListeners([]);
+      
+      // Reload user data and route stops
+      const userData = await AsyncStorage.getItem('userData');
+      if (userData) {
+        const parsedData = JSON.parse(userData);
+        const routeNumber = parsedData.routeNumber || '';
+        
+        if (routeNumber) {
+          // Force reload route data
+          await loadRouteStopsData(routeNumber);
+        }
+      }
+    } catch (error) {
+      console.error('Error during manual refresh:', error);
+      setError('Failed to refresh data');
+    } finally {
+      setManualRefreshing(false);
+    }
+  };
+
+  // Handle refresh from parent component
+  useEffect(() => {
+    if (refreshing && !manualRefreshing) {
+      console.log('🔄 Parent refresh detected for BusStopTimeline');
+      handleManualRefresh();
+    }
+  }, [refreshing]);
 
   // Load user data
   useEffect(() => {
@@ -69,163 +289,8 @@ const BusStopTimeline = ({ isDark }) => {
 
   // Load route stops when route number changes and set up listeners for reached status
   useEffect(() => {
-    const loadRouteStops = async () => {
-      if (!userRouteNumber) return;
-
-      try {
-        setIsLoading(true);
-        
-        // Check connection first
-        const isConnected = await checkFirestoreConnection();
-        setConnectionStatus(isConnected);
-        
-        if (!isConnected) {
-          setError('Firebase connection issue. Please check your internet connection and try again.');
-          setIsLoading(false);
-          return;
-        }
-        
-        const routeRef = collection(firestoreDb, `Route${userRouteNumber}`);
-        const stopsSnapshot = await getDocs(routeRef);
-        
-        if (stopsSnapshot.empty) {
-          console.log(`No stops found for route ${userRouteNumber}`);
-          setRouteStops([]);
-          setError(`No stops found for route ${userRouteNumber}`);
-        } else {
-          // Get all stop names and sort them in order
-          const stops = stopsSnapshot.docs.map(doc => ({
-            name: doc.id,
-            data: doc.data()
-          }));
-          
-          // Sort stops by serialNumber if available, then by order as fallback
-          const sortedStops = stops.sort((a, b) => {
-            // First try to sort by serialNumber
-            if (a.data.serialNumber !== undefined && b.data.serialNumber !== undefined) {
-              return a.data.serialNumber - b.data.serialNumber;
-            }
-            // Fall back to order if serialNumber is not available
-            else if (a.data.order !== undefined && b.data.order !== undefined) {
-              return a.data.order - b.data.order;
-            }
-            return 0;
-          });
-          
-          setRouteStops(sortedStops);
-          
-          // Set up listeners for each stop's reached status
-          const listeners = [];
-          
-          // Clean up any existing listeners
-          stopListeners.forEach(unsubscribe => unsubscribe());
-          
-          // Create a single listener for the entire route collection
-          const routeRef = collection(firestoreDb, `Route${userRouteNumber}`);
-          const routeListener = onSnapshot(routeRef, (snapshot) => {
-            try {
-              console.log(`Received snapshot for Route${userRouteNumber} with ${snapshot.docs.length} documents`);
-              
-              // Process all changes in a batch for better performance
-              const updatedStops = {};
-              let highestReachedIndex = -1;
-              
-              // Log all stops with reached status for debugging
-              const reachedStopsDebug = [];
-              
-              snapshot.docs.forEach(doc => {
-                try {
-                  const stopData = doc.data();
-                  const stopName = doc.id;
-                  
-                  // Log each stop's reached status for debugging
-                  console.log(`Stop ${stopName} data:`, JSON.stringify({
-                    reached: stopData.reached,
-                    reachedTime: stopData.reachedTime,
-                    serialNumber: stopData.serialNumber || stopData.order || 0
-                  }));
-                  
-                  if (stopData.reached === true) {
-                    reachedStopsDebug.push(stopName);
-                  }
-                  
-                  if (stopData.reached !== undefined) {
-                    updatedStops[stopName] = {
-                      reached: stopData.reached === true, // Ensure it's a boolean true
-                      time: stopData.reachedTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                    };
-                    
-                    // If this stop is reached, track its index
-                    if (stopData.reached === true) {
-                      const stopIndex = sortedStops.findIndex(s => s.name === stopName);
-                      if (stopIndex > highestReachedIndex) {
-                        highestReachedIndex = stopIndex;
-                      }
-                    }
-                  }
-                } catch (docError) {
-                  console.error(`Error processing stop document:`, docError);
-                }
-              });
-              
-              // Log reached stops for debugging
-              if (reachedStopsDebug.length > 0) {
-                console.log(`Reached stops in this snapshot: ${reachedStopsDebug.join(', ')}`);
-              } else {
-                console.log('No reached stops found in this snapshot');
-              }
-              
-              // Update all reached stops at once for better performance
-              if (Object.keys(updatedStops).length > 0) {
-                console.log(`Updating ${Object.keys(updatedStops).length} stops from Firestore`);
-                setReachedStops(updatedStops);
-                
-                // Update current stop index if needed
-                if (highestReachedIndex > currentStopIndex) {
-                  console.log(`Updating current stop index to ${highestReachedIndex}`);
-                  setCurrentStopIndex(highestReachedIndex);
-                }
-              }
-            } catch (snapshotError) {
-              console.error(`Error processing snapshot for route ${userRouteNumber}:`, snapshotError);
-            }
-          }, async error => {
-            console.error(`Error listening to route ${userRouteNumber}:`, error);
-            // Try to provide more details about the error
-            console.error(`Error details: ${error.code} - ${error.message}`);
-            
-            // Check if it's a connection error
-            const isConnectionError = await handleFirestoreError(error);
-            if (isConnectionError) {
-              setConnectionStatus(false);
-              setError('Firebase connection issue. Please check your internet connection.');
-            }
-          });
-          
-          // Register with our listener manager - use background type for better reliability
-          const unregisterRouteListener = registerListener(
-            `timeline-route-${userRouteNumber}`,
-            routeListener,
-            'background' // Use background type to ensure it keeps working even when not directly visible
-          );
-          
-          listeners.push(unregisterRouteListener);
-          
-          setStopListeners(listeners);
-          setError(null);
-          console.log(`Loaded ${sortedStops.length} stops for route ${userRouteNumber} and set up listeners`);
-        }
-      } catch (error) {
-        console.error('Error loading route stops:', error);
-        setRouteStops([]);
-        setError('Failed to load route stops');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     if (userRouteNumber) {
-      loadRouteStops();
+      loadRouteStopsData(userRouteNumber);
     }
     
     // Clean up listeners when component unmounts or route changes
@@ -234,15 +299,6 @@ const BusStopTimeline = ({ isDark }) => {
     };
   }, [userRouteNumber]);
 
-  // Add a useEffect to log when reachedStops changes
-  useEffect(() => {
-    if (Object.keys(reachedStops).length > 0) {
-      console.log('Reached stops updated:', Object.keys(reachedStops)
-        .filter(name => reachedStops[name].reached)
-        .map(name => name)
-        .join(', '));
-    }
-  }, [reachedStops]);
 
   // Listen for bus location updates (only for display purposes)
   useEffect(() => {
@@ -374,12 +430,38 @@ const BusStopTimeline = ({ isDark }) => {
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.Text 
+        {/* Header with title and refresh button */}
+        <Animated.View 
           entering={FadeInDown.delay(200).springify()}
-          style={[styles.title, { color: textColor }]}
+          style={styles.headerContainer}
         >
-          Route {userRouteNumber} Timeline
-        </Animated.Text>
+          <Text style={[styles.title, { color: textColor }]}>
+            Route {userRouteNumber} Timeline
+          </Text>
+          <TouchableOpacity 
+            style={[
+              styles.refreshButton, 
+              { 
+                backgroundColor: isDark ? '#2a2a2a' : '#f0f0f0',
+                opacity: (manualRefreshing || refreshing) ? 0.6 : 1
+              }
+            ]}
+            onPress={handleManualRefresh}
+            disabled={manualRefreshing || refreshing}
+          >
+            <Ionicons 
+              name="refresh" 
+              size={20} 
+              color={accentColor} 
+              style={{
+                transform: [{ rotate: (manualRefreshing || refreshing) ? '360deg' : '0deg' }]
+              }}
+            />
+            <Text style={[styles.refreshButtonText, { color: accentColor }]}>
+              {(manualRefreshing || refreshing) ? 'Refreshing...' : 'Refresh'}
+            </Text>
+          </TouchableOpacity>
+        </Animated.View>
       
       <View style={styles.timelineContainer}>
         {/* Center timeline line */}
@@ -572,11 +654,32 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 30,
   },
+  headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 5,
+  },
   title: {
     fontSize: 20,
     fontFamily: 'flux-bold',
-    marginBottom: 20,
-    textAlign: 'center',
+    flex: 1,
+  },
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#1E90FF',
+    marginLeft: 10,
+  },
+  refreshButtonText: {
+    fontSize: 12,
+    fontFamily: 'flux-medium',
+    marginLeft: 4,
   },
   timelineContainer: {
     position: 'relative',

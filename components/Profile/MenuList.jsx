@@ -3,25 +3,26 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
 import { doc, getDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
-  Dimensions,
-  Image,
-  Share,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  useColorScheme,
-  View
+    Dimensions,
+    Image,
+    Share,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    useColorScheme,
+    View
 } from 'react-native';
 import Animated, {
-  FadeInDown,
-  useAnimatedStyle,
-  useSharedValue,
-  withSequence,
-  withTiming,
-  ZoomIn
+    FadeInDown,
+    useAnimatedStyle,
+    useSharedValue,
+    withSequence,
+    withTiming,
+    ZoomIn
 } from 'react-native-reanimated';
 import { firestoreDb } from '../../configs/FirebaseConfigs';
 
@@ -58,9 +59,17 @@ export default function MenuList({ isDark }) {
     
     // Cleanup function to reset animation values when component unmounts
     return () => {
-      // Reset animation values to prevent errors during unmount
-      itemScales.value = [1, 1];
-      itemRotations.value = [0, 0];
+      try {
+        // Reset animation values to prevent errors during unmount
+        if (itemScales && itemScales.value) {
+          itemScales.value = [1, 1];
+        }
+        if (itemRotations && itemRotations.value) {
+          itemRotations.value = [0, 0];
+        }
+      } catch (cleanupError) {
+        console.warn('Cleanup animation error (non-critical):', cleanupError);
+      }
     };
   }, []);
 
@@ -83,6 +92,12 @@ export default function MenuList({ isDark }) {
   
   const animateItem = (index) => {
     try {
+      // Check if index is valid
+      if (typeof index !== 'number' || index < 0 || index >= menulist.length) {
+        console.warn('Invalid animation index:', index);
+        return;
+      }
+      
       // Safely create new arrays with proper checks
       if (!itemScales.value || !Array.isArray(itemScales.value)) {
         itemScales.value = [1, 1];
@@ -90,6 +105,14 @@ export default function MenuList({ isDark }) {
       
       if (!itemRotations.value || !Array.isArray(itemRotations.value)) {
         itemRotations.value = [0, 0];
+      }
+      
+      // Ensure arrays have the correct length
+      while (itemScales.value.length <= index) {
+        itemScales.value.push(1);
+      }
+      while (itemRotations.value.length <= index) {
+        itemRotations.value.push(0);
       }
       
       // Create a new array to avoid mutating the shared value directly
@@ -115,31 +138,27 @@ export default function MenuList({ isDark }) {
     } catch (error) {
       console.error('Animation error:', error);
       // Reset to safe values if there's an error
-      itemScales.value = [1, 1];
-      itemRotations.value = [0, 0];
+      try {
+        itemScales.value = [1, 1];
+        itemRotations.value = [0, 0];
+      } catch (resetError) {
+        console.warn('Failed to reset animation values:', resetError);
+      }
     }
   };
 
   const onMenuClick = (item, index) => {
-    // Trigger animation
+    if (item.path === 'logout') {
+      // For logout, don't trigger animation to avoid race conditions
+      handleLogout();
+      return;
+    }
+    
+    // Trigger animation for non-logout items
     animateItem(index);
     
     // Handle menu actions with a slight delay for animation
     setTimeout(async () => {
-      if (item.path === 'logout') {
-        try {
-          // Reset animation values to prevent errors during unmount
-          itemScales.value = [1, 1];
-          itemRotations.value = [0, 0];
-          
-          // Clear storage and sign out
-          await AsyncStorage.clear(); // Clear all stored data
-          await signOut();
-        } catch (error) {
-          console.error('Error during logout:', error);
-        }
-        return;
-      }
       if (item.path === 'share') {
         Share.share({
           message: `The Viscous Bus Tracker App is a smart solution developed by Om Shrikhande 🎓, a 3rd-year CSE student, and Kuldeep Tiwari 🛠️, the IoT developer, to streamline institute transportation. With 🚌 Real-Time Bus Tracking, 📅 ETA updates, and 🗺️ Interactive Maps, the app ensures students and staff can track buses easily and plan commutes effectively. Its 🤝 User-Friendly Interface offers a seamless experience, making it a valuable tool for the Viscous community. 🚀 Download the app here: ${apkLink || 'Link not available'}. If you are interested in Development contact us on LinkedIn.`,
@@ -151,31 +170,122 @@ export default function MenuList({ isDark }) {
     }, 300);
   };
 
+  const handleLogout = async () => {
+    try {
+      console.log('🚪 Starting logout process...');
+      
+      // Show immediate feedback to user
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      // Clean up Firebase listeners first
+      console.log('🔥 Cleaning up Firebase listeners...');
+      try {
+        const { cleanupAllListeners } = await import('../../utils/firebaseListenerManager');
+        cleanupAllListeners();
+      } catch (listenerError) {
+        console.warn('Firebase listener cleanup error (non-critical):', listenerError);
+      }
+      
+      console.log('🧹 Clearing AsyncStorage...');
+      // Clear all stored data
+      await AsyncStorage.clear();
+      console.log('✅ Storage cleared successfully');
+      
+      // Clear any cached auth tokens from SecureStore
+      console.log('🔑 Clearing cached authentication tokens...');
+      try {
+        const clerkTokenKeys = [
+          '__clerk_client_jwt',
+          '__clerk_session_jwt', 
+          '__clerk_user_jwt',
+          '__clerk_client_uat',
+          '__clerk_refresh_token'
+        ];
+        
+        for (const key of clerkTokenKeys) {
+          try {
+            await SecureStore.deleteItemAsync(key);
+          } catch (deleteError) {
+            console.warn(`⚠️ Could not clear token ${key}:`, deleteError);
+          }
+        }
+        console.log('✅ Token cache clearing completed');
+      } catch (tokenError) {
+        console.warn('⚠️ Token cache clear failed (non-critical):', tokenError);
+      }
+      
+      console.log('🔓 Signing out from Clerk...');
+      // Sign out from Clerk - this will trigger the SignedOut component
+      await signOut();
+      console.log('✅ Clerk sign out completed successfully');
+      
+      // Note: No need to navigate manually - Clerk's SignedOut component will handle it
+      
+    } catch (error) {
+      console.error('❌ Error during logout:', error);
+      
+      // Emergency cleanup - still try to sign out
+      try {
+        console.log('🆘 Emergency cleanup...');
+        await AsyncStorage.clear();
+        await signOut(); // This should still work even if other parts failed
+      } catch (emergencyError) {
+        console.error('❌ Emergency cleanup failed:', emergencyError);
+      }
+    }
+  };
+
   // Create animated styles for each menu item at the component level with improved safety checks
   const animatedStyle0 = useAnimatedStyle(() => {
-    // Safely access array values with null coalescing
-    const scale = (itemScales.value && itemScales.value[0] !== undefined) ? itemScales.value[0] : 1;
-    const rotation = (itemRotations.value && itemRotations.value[0] !== undefined) ? itemRotations.value[0] : 0;
-    
-    return {
-      transform: [
-        { scale },
-        { rotate: `${rotation}deg` }
-      ],
-    };
+    try {
+      // Safely access array values with multiple safety checks
+      const scaleValue = itemScales.value;
+      const rotationValue = itemRotations.value;
+      
+      const scale = (Array.isArray(scaleValue) && typeof scaleValue[0] === 'number' && !isNaN(scaleValue[0])) ? scaleValue[0] : 1;
+      const rotation = (Array.isArray(rotationValue) && typeof rotationValue[0] === 'number' && !isNaN(rotationValue[0])) ? rotationValue[0] : 0;
+      
+      return {
+        transform: [
+          { scale: Math.max(0.1, Math.min(2, scale)) }, // Constrain scale between 0.1 and 2
+          { rotate: `${Math.max(-360, Math.min(360, rotation))}deg` } // Constrain rotation
+        ],
+      };
+    } catch (error) {
+      // Return safe default values if any error occurs
+      return {
+        transform: [
+          { scale: 1 },
+          { rotate: '0deg' }
+        ],
+      };
+    }
   });
   
   const animatedStyle1 = useAnimatedStyle(() => {
-    // Safely access array values with null coalescing
-    const scale = (itemScales.value && itemScales.value[1] !== undefined) ? itemScales.value[1] : 1;
-    const rotation = (itemRotations.value && itemRotations.value[1] !== undefined) ? itemRotations.value[1] : 0;
-    
-    return {
-      transform: [
-        { scale },
-        { rotate: `${rotation}deg` }
-      ],
-    };
+    try {
+      // Safely access array values with multiple safety checks
+      const scaleValue = itemScales.value;
+      const rotationValue = itemRotations.value;
+      
+      const scale = (Array.isArray(scaleValue) && typeof scaleValue[1] === 'number' && !isNaN(scaleValue[1])) ? scaleValue[1] : 1;
+      const rotation = (Array.isArray(rotationValue) && typeof rotationValue[1] === 'number' && !isNaN(rotationValue[1])) ? rotationValue[1] : 0;
+      
+      return {
+        transform: [
+          { scale: Math.max(0.1, Math.min(2, scale)) }, // Constrain scale between 0.1 and 2
+          { rotate: `${Math.max(-360, Math.min(360, rotation))}deg` } // Constrain rotation
+        ],
+      };
+    } catch (error) {
+      // Return safe default values if any error occurs
+      return {
+        transform: [
+          { scale: 1 },
+          { rotate: '0deg' }
+        ],
+      };
+    }
   });
 
   // Function to get the appropriate style based on index
