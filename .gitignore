@@ -69,7 +69,7 @@ android
 
 *.txt
 .vscode/
-Backend/
+
 *md
 app.config.js
 app.json

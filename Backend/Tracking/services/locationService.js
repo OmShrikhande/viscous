@@ -2,7 +2,7 @@
 const { ref, onValue, get, child } = require('firebase/database');
 const { collection, doc, getDoc, getDocs, updateDoc, Timestamp, setDoc } = require('firebase/firestore');
 
-const { realtimeDatabase, firestoreDb } = require('../config/firebase');
+const { realtimeDatabase, firestoreDb } = require('./../config/firebase');
 const { isWithinRadius, calculateDistance } = require('../utils/geoUtils');
 const excelStopService = require('./excelStopService');
 
