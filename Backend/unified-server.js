@@ -14,7 +14,7 @@ const mongoose = require('mongoose');
 const admin = require('firebase-admin');
 const { initializeApp } = require('firebase/app');
 const { getFirestore } = require('firebase/firestore');
-const { getDatabase } = require('firebase/database');
+const { getDatabase, ref, set } = require('firebase/database');
 const path = require('path');
 const fs = require('fs');
 const dotenv = require('dotenv');
@@ -29,17 +29,6 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 app.use(express.json());
-
-// Apply performance optimizations if in production
-if (process.env.NODE_ENV === 'production') {
-  try {
-    const { setupOptimizations } = require('./optimization_middleware');
-    const optimizations = setupOptimizations(app);
-    console.log('✅ Production optimizations applied');
-  } catch (error) {
-    console.warn('⚠️ Could not load optimizations:', error.message);
-  }
-}
 
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(__dirname, 'Bus tracking Admin/Admin/Backend/uploads')));
@@ -192,12 +181,32 @@ app.post("/esp8266/upload", async (req, res) => {
     await docRef.set(docData);
 
     console.log(`[ESP8266] Location data saved: (${docData.Latitude}, ${docData.Longitude})`);
+    
+    // Also save to Realtime Database at bus/Location path
+    const realtimeData = {
+      Latitude: docData.Latitude || null,
+      Longitude: docData.Longitude || null,
+      Speed: docData.Speed || null,
+      Timestamp: finalTimestamp
+    };
+
+    try {
+      // Write to Realtime Database
+      const realtimeRef = ref(realtimeDatabase, 'bus/Location');
+      await set(realtimeRef, realtimeData);
+      console.log(`[ESP8266] Location data saved to Realtime Database: bus/Location`);
+    } catch (realtimeError) {
+      console.error("[ESP8266] Error saving to Realtime Database:", realtimeError);
+      // Continue execution - don't fail the entire request if Realtime DB fails
+    }
+
     res.status(200).send("Data uploaded successfully!");
   } catch (error) {
     console.error("[ESP8266] Error:", error);
     res.status(500).send("Server error: " + error.message);
   }
 });
+
 
 // ===== TRACKING SERVER ROUTES =====
 
