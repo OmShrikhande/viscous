@@ -8,7 +8,8 @@
     "dev": "nodemon unified-server.js",
     "setup": "node setup.js",
     "legacy": "node server.js",
-    "dev-legacy": "nodemon server.js"
+    "dev-legacy": "nodemon server.js",
+    "keep-alive": "node keep-alive.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
@@ -30,6 +31,7 @@
     "mongoose": "^7.8.7",
     "multer": "^2.0.1",
     "node-cache": "^5.1.2",
+    "node-fetch": "^3.3.2",
     "nodemailer": "^7.0.3",
     "path": "^0.12.7",
     "xlsx": "^0.18.5"

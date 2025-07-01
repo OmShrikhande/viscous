@@ -1,0 +1,43 @@
+name: Keep Server Alive
+
+on:
+  schedule:
+    # Run every 14 minutes
+    - cron: '*/14 * * * *'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Ping Server
+      run: |
+        echo "Pinging server to keep it alive..."
+        
+        # Replace YOUR_RENDER_URL with your actual Render service URL
+        # Example: https://your-service-name.onrender.com
+        SERVER_URL="${{ secrets.SERVER_URL || 'https://your-service-name.onrender.com' }}"
+        
+        # Ping the health endpoint
+        response=$(curl -s -o /dev/null -w "%{http_code}" "${SERVER_URL}/health")
+        
+        if [ $response -eq 200 ]; then
+          echo "✅ Server is alive! Response code: $response"
+          
+          # Also ping the root endpoint for good measure
+          curl -s "${SERVER_URL}/" > /dev/null
+          echo "✅ Root endpoint pinged successfully"
+          
+        else
+          echo "❌ Server responded with code: $response"
+          exit 1
+        fi
+        
+        echo "Keep-alive ping completed at $(date)"
+
+    - name: Log Ping Result
+      if: always()
+      run: |
+        echo "Keep-alive job completed at $(date)"
+        echo "Next ping scheduled in 14 minutes"

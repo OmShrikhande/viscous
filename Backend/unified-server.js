@@ -122,6 +122,39 @@ if (process.env.MONGODB_URI) {
   console.log('✅ MongoDB connection skipped - Using mock data');
 }
 
+// ===== HEALTH CHECK ROUTE =====
+
+// Health check endpoint to keep the server alive
+app.get('/health', (req, res) => {
+  const uptime = process.uptime();
+  const uptimeHours = Math.floor(uptime / 3600);
+  const uptimeMinutes = Math.floor((uptime % 3600) / 60);
+  const uptimeSeconds = Math.floor(uptime % 60);
+  
+  res.status(200).json({
+    status: 'OK',
+    message: 'Server is running',
+    timestamp: new Date().toISOString(),
+    uptime: `${uptimeHours}h ${uptimeMinutes}m ${uptimeSeconds}s`,
+    port: PORT,
+    services: ['ESP8266', 'Tracking', 'Admin Backend']
+  });
+});
+
+// Root endpoint
+app.get('/', (req, res) => {
+  res.status(200).json({
+    message: 'Bus Tracking Unified Server',
+    status: 'running',
+    endpoints: {
+      health: '/health',
+      esp8266: '/esp8266',
+      tracking: '/tracking',
+      admin: '/api'
+    }
+  });
+});
+
 // ===== ESP8266 SERVER ROUTES =====
 
 // ESP8266 Server endpoint
@@ -333,6 +366,68 @@ app.use('/api', attendanceRoutes);
 app.use('/api', busLocationRoutes);
 app.use('/api/location', locationRoutes);
 
+// ===== KEEP-ALIVE MECHANISM =====
+
+// Self-ping function to keep the server alive on Render
+function startKeepAlive() {
+  const KEEP_ALIVE_INTERVAL = 14 * 60 * 1000; // 14 minutes in milliseconds
+  const SERVER_URL = process.env.RENDER_EXTERNAL_URL || process.env.API_BASE_URL;
+  
+  if (!SERVER_URL) {
+    console.log('⚠️  No RENDER_EXTERNAL_URL or API_BASE_URL found - Self-ping disabled');
+    return;
+  }
+  
+  console.log(`🔄 Keep-alive mechanism started - will ping every 14 minutes`);
+  console.log(`🎯 Target URL: ${SERVER_URL}/health`);
+  
+  const keepAliveInterval = setInterval(async () => {
+    try {
+      // Use dynamic import for node-fetch if available, otherwise use a simple HTTP request
+      const fetch = (await import('node-fetch')).default;
+      
+      const response = await fetch(`${SERVER_URL}/health`, {
+        method: 'GET',
+        timeout: 10000 // 10 second timeout
+      });
+      
+      if (response.ok) {
+        console.log(`✅ Keep-alive ping successful at ${new Date().toISOString()}`);
+      } else {
+        console.log(`⚠️  Keep-alive ping returned status: ${response.status}`);
+      }
+    } catch (error) {
+      // Fallback to native http module if fetch fails
+      try {
+        const https = require('https');
+        const http = require('http');
+        const url = require('url');
+        
+        const parsedUrl = url.parse(`${SERVER_URL}/health`);
+        const protocol = parsedUrl.protocol === 'https:' ? https : http;
+        
+        const req = protocol.get(parsedUrl, (res) => {
+          console.log(`✅ Keep-alive ping successful (fallback) at ${new Date().toISOString()}`);
+        });
+        
+        req.on('error', (err) => {
+          console.log(`⚠️  Keep-alive ping failed: ${err.message}`);
+        });
+        
+        req.setTimeout(10000, () => {
+          req.abort();
+          console.log('⚠️  Keep-alive ping timeout');
+        });
+        
+      } catch (fallbackError) {
+        console.log(`⚠️  Keep-alive ping failed: ${error.message}`);
+      }
+    }
+  }, KEEP_ALIVE_INTERVAL);
+  
+  return keepAliveInterval;
+}
+
 // ===== START THE SERVER =====
 
 // Start the server
@@ -347,6 +442,9 @@ app.listen(PORT, () => {
   console.log('Starting bus location monitoring service...');
   const intervals = startLocationMonitoring();
   
+  // Start the keep-alive mechanism
+  const keepAliveInterval = startKeepAlive();
+  
   // Handle graceful shutdown
   process.on('SIGINT', () => {
     console.log('Shutting down server...');
@@ -357,6 +455,9 @@ app.listen(PORT, () => {
     }
     if (intervals && intervals.midnightCheckInterval) {
       clearInterval(intervals.midnightCheckInterval);
+    }
+    if (keepAliveInterval) {
+      clearInterval(keepAliveInterval);
     }
     
     // Close MongoDB connection if it exists

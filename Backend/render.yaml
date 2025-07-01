@@ -20,6 +20,11 @@ services:
           name: bus-tracking-system
           type: web
           property: host
+      - key: RENDER_EXTERNAL_URL
+        fromService:
+          name: bus-tracking-system
+          type: web
+          property: host
       # Firebase Admin SDK Variables
       - key: FIREBASE_PROJECT_ID
         sync: false
