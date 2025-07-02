@@ -242,7 +242,6 @@ try {
   // Write DailyDistance data
   const realtimeDistanceData = {
     DailyDistance: docData.DailyDistance || null,
-    Timestamp: finalTimestamp || null
   };
 
   const distanceRef = ref(realtimeDatabase, 'bus/Distance');
