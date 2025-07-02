@@ -150,9 +150,33 @@ app.get('/', (req, res) => {
       health: '/health',
       esp8266: '/esp8266',
       tracking: '/tracking',
-      admin: '/api'
+      admin: '/api',
+      test: '/test-daily-distance'
     }
   });
+});
+
+// Test endpoint for DailyDistance
+app.post('/test-daily-distance', async (req, res) => {
+  try {
+    const testValue = req.body.value || 123.45;
+    
+    // Test saving to both paths
+    const dailyDistanceRef = ref(realtimeDatabase, 'bus/Distance/DailyDistance');
+    await set(dailyDistanceRef, testValue);
+    
+    const backupDistanceRef = ref(realtimeDatabase, 'bus/DailyDistance');
+    await set(backupDistanceRef, testValue);
+    
+    res.status(200).json({
+      message: 'Test DailyDistance saved successfully',
+      value: testValue,
+      paths: ['bus/Distance/DailyDistance', 'bus/DailyDistance']
+    });
+  } catch (error) {
+    console.error('Test DailyDistance error:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // ===== ESP8266 SERVER ROUTES =====
@@ -161,6 +185,7 @@ app.get('/', (req, res) => {
 app.post("/esp8266/upload", async (req, res) => {
   try {
     const data = req.body;
+    console.log(`[ESP8266] Received data:`, JSON.stringify(data, null, 2));
 
     // Get current time in IST (UTC+5:30)
     const now = new Date();
@@ -236,13 +261,25 @@ app.post("/esp8266/upload", async (req, res) => {
       console.log(`[ESP8266] Location data saved to Realtime Database: bus/Location`);
       
       // Write daily distance to bus/Distance/DailyDistance path
-      if (docData.DailyDistance !== null && docData.DailyDistance !== undefined) {
-        const dailyDistanceRef = ref(realtimeDatabase, 'bus/Distance/DailyDistance');
-        await set(dailyDistanceRef, docData.DailyDistance);
-        console.log(`[ESP8266] Daily distance saved to Realtime Database: bus/Distance/DailyDistance`);
-      }
+      console.log(`[ESP8266] DailyDistance value from docData:`, docData.DailyDistance);
+      console.log(`[ESP8266] DailyDistance value from original data:`, data?.dailyDistance);
+      
+      // Always try to save DailyDistance, even if it's 0
+      const dailyDistanceValue = docData.DailyDistance ?? 0; // Use 0 as default if undefined/null
+      
+      // Save to multiple paths to ensure it works
+      const dailyDistanceRef = ref(realtimeDatabase, 'bus/Distance/DailyDistance');
+      await set(dailyDistanceRef, dailyDistanceValue);
+      console.log(`[ESP8266] Daily distance saved to Realtime Database: bus/Distance/DailyDistance = ${dailyDistanceValue}`);
+      
+      // Also save to a backup location for redundancy
+      const backupDistanceRef = ref(realtimeDatabase, 'bus/DailyDistance');
+      await set(backupDistanceRef, dailyDistanceValue);
+      console.log(`[ESP8266] Daily distance also saved to backup path: bus/DailyDistance = ${dailyDistanceValue}`);
+      
     } catch (realtimeError) {
       console.error("[ESP8266] Error saving to Realtime Database:", realtimeError);
+      console.error("[ESP8266] Error details:", realtimeError.message);
       // Continue execution - don't fail the entire request if Realtime DB fails
     }
 
