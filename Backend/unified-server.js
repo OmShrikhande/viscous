@@ -245,7 +245,7 @@ try {
     Timestamp: finalTimestamp || null
   };
 
-  const distanceRef = ref(realtimeDatabase, 'bus/Distance/DailyDistance');
+  const distanceRef = ref(realtimeDatabase, 'bus/Distance');
   await set(distanceRef, realtimeDistanceData);
   console.log(`[ESP8266] DailyDistance saved to Realtime Database: bus/Distance/DailyDistance`);
 } catch (error) {
