@@ -19,9 +19,6 @@ const path = require('path');
 const fs = require('fs');
 const dotenv = require('dotenv');
 
-// Import Excel Service
-const excelService = require('./services/excelService');
-
 // Load environment variables
 dotenv.config();
 
@@ -153,17 +150,8 @@ app.get('/', (req, res) => {
       health: '/health',
       esp8266: '/esp8266',
       tracking: '/tracking',
-      admin: '/api',
-      excel: '/api/excel'
-    },
-    features: [
-      'ESP8266 GPS Data Collection',
-      'Real-time Bus Tracking',
-      'Admin Dashboard',
-      'Excel Report Generation',
-      'Daily Distance Logging',
-      'Stop Arrival Tracking'
-    ]
+      admin: '/api'
+    }
   });
 });
 
@@ -252,25 +240,6 @@ app.post("/esp8266/upload", async (req, res) => {
     } catch (realtimeError) {
       console.error("[ESP8266] Error saving to Realtime Database:", realtimeError);
       // Continue execution - don't fail the entire request if Realtime DB fails
-    }
-
-    // Log daily distance and location data to Excel
-    try {
-      if (data?.dailyDistance !== undefined || data?.location) {
-        await excelService.logDailyDistance({
-          routeNumber: data.routeNumber || 'Route-1',
-          dailyDistance: data.dailyDistance,
-          totalDistance: data.totalDistance,
-          latitude: data.location?.latitude,
-          longitude: data.location?.longitude,
-          speed: data.location?.speed,
-          status: 'Active',
-          remarks: `GPS data received from NodeMCU`
-        });
-      }
-    } catch (excelError) {
-      console.error("[ESP8266] Error logging to Excel:", excelError);
-      // Continue execution - don't fail the entire request if Excel logging fails
     }
 
     res.status(200).send("Data uploaded successfully!");
@@ -372,172 +341,6 @@ app.post('/tracking/api/stops/:id/reset', async (req, res) => {
     });
   } catch (error) {
     console.error('[Tracking] Error resetting stop:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
-  }
-});
-
-// ===== EXCEL REPORTING ROUTES =====
-
-// Get daily summary from Excel
-app.get('/api/excel/daily-summary/:date?', async (req, res) => {
-  try {
-    const date = req.params.date; // Optional date parameter
-    const summary = await excelService.getDailySummary(date);
-    
-    if (!summary) {
-      return res.status(404).json({
-        success: false,
-        message: 'No data found for the specified date'
-      });
-    }
-    
-    res.json({
-      success: true,
-      data: summary
-    });
-  } catch (error) {
-    console.error('[Excel] Error getting daily summary:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
-  }
-});
-
-// Get stop arrivals from Excel
-app.get('/api/excel/stop-arrivals/:date?', async (req, res) => {
-  try {
-    const date = req.params.date; // Optional date parameter
-    const arrivals = await excelService.getStopArrivals(date);
-    
-    res.json({
-      success: true,
-      data: arrivals
-    });
-  } catch (error) {
-    console.error('[Excel] Error getting stop arrivals:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
-  }
-});
-
-// Generate monthly report
-app.post('/api/excel/monthly-report', async (req, res) => {
-  try {
-    const { year, month } = req.body;
-    
-    if (!year || !month) {
-      return res.status(400).json({
-        success: false,
-        message: 'Year and month are required'
-      });
-    }
-    
-    const reportFile = await excelService.generateMonthlyReport(parseInt(year), parseInt(month));
-    
-    if (!reportFile) {
-      return res.status(404).json({
-        success: false,
-        message: 'No data available for the specified month'
-      });
-    }
-    
-    res.json({
-      success: true,
-      message: 'Monthly report generated successfully',
-      filePath: reportFile
-    });
-  } catch (error) {
-    console.error('[Excel] Error generating monthly report:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
-  }
-});
-
-// Download Excel files
-app.get('/api/excel/download/:type', (req, res) => {
-  try {
-    const { type } = req.params;
-    const filePaths = excelService.getExcelFilePaths();
-    
-    let filePath;
-    let fileName;
-    
-    switch (type) {
-      case 'daily':
-        filePath = filePaths.dailyReport;
-        fileName = 'daily-bus-tracking.xlsx';
-        break;
-      case 'stops':
-        filePath = filePaths.stopReport;
-        fileName = 'stop-arrival-log.xlsx';
-        break;
-      default:
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid file type. Use "daily" or "stops"'
-        });
-    }
-    
-    // Check if file exists
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({
-        success: false,
-        message: 'File not found'
-      });
-    }
-    
-    // Send file for download
-    res.download(filePath, fileName, (err) => {
-      if (err) {
-        console.error('Error downloading file:', err);
-        res.status(500).json({
-          success: false,
-          message: 'Error downloading file'
-        });
-      }
-    });
-  } catch (error) {
-    console.error('[Excel] Error downloading file:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
-  }
-});
-
-// Get Excel file information
-app.get('/api/excel/info', (req, res) => {
-  try {
-    const filePaths = excelService.getExcelFilePaths();
-    
-    const info = {
-      dailyReport: {
-        path: filePaths.dailyReport,
-        exists: fs.existsSync(filePaths.dailyReport),
-        size: fs.existsSync(filePaths.dailyReport) ? fs.statSync(filePaths.dailyReport).size : 0
-      },
-      stopReport: {
-        path: filePaths.stopReport,
-        exists: fs.existsSync(filePaths.stopReport),
-        size: fs.existsSync(filePaths.stopReport) ? fs.statSync(filePaths.stopReport).size : 0
-      },
-      reportsDirectory: filePaths.reportsDirectory
-    };
-    
-    res.json({
-      success: true,
-      data: info
-    });
-  } catch (error) {
-    console.error('[Excel] Error getting file info:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'
