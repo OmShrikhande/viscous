@@ -6,6 +6,9 @@ const { realtimeDatabase, firestoreDb } = require('./../config/firebase');
 const { isWithinRadius, calculateDistance } = require('../utils/geoUtils');
 const excelStopService = require('./excelStopService');
 
+// Import the main Excel service for logging
+const excelService = require('../../services/excelService');
+
 // Radius in meters to consider a stop as reached
 const STOP_RADIUS = 50;
 
@@ -186,6 +189,33 @@ const markStopAsReached = async (stopId) => {
     }
     
     console.log(`Stop ${stopId} marked as reached at ${formattedTime}`);
+    
+    // Log stop arrival to Excel
+    try {
+      // Get stop details from cache or fetch them
+      const stops = await getStops();
+      const stopData = stops.find(stop => stop.id === stopId);
+      
+      if (stopData) {
+        // Get current bus location for logging
+        const busLocation = await getBusLocation();
+        
+        await excelService.logStopArrival({
+          stopId: stopId,
+          stopName: stopData.name || `Stop ${stopId}`,
+          routeNumber: 'Route-1', // You can make this dynamic
+          arrivalTime: formattedTime,
+          latitude: busLocation?.latitude,
+          longitude: busLocation?.longitude,
+          distanceFromStop: stopData.distanceFromBus || 0,
+          status: 'Reached',
+          remarks: `Bus reached ${stopData.name || stopId} at ${formattedTime}`
+        });
+      }
+    } catch (excelError) {
+      console.error(`Error logging stop arrival to Excel for ${stopId}:`, excelError);
+      // Don't throw error to avoid affecting the main functionality
+    }
   } catch (error) {
     console.error(`Error marking stop ${stopId} as reached:`, error);
     throw error;
