@@ -162,13 +162,16 @@ app.post("/esp8266/upload", async (req, res) => {
   try {
     const data = req.body;
 
+    // Get current time in IST (UTC+5:30)
     const now = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+    const istTime = new Date(now.getTime() + istOffset);
     const pad = (n) => n.toString().padStart(2, "0");
 
-    // Format: DDMMYY
-    const date = `${pad(now.getDate())}${pad(now.getMonth() + 1)}${now.getFullYear().toString().slice(2)}`;
-    // Format: HHMMSS
-    const time = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    // Format: DDMMYY (using IST)
+    const date = `${pad(istTime.getUTCDate())}${pad(istTime.getUTCMonth() + 1)}${istTime.getUTCFullYear().toString().slice(2)}`;
+    // Format: HHMMSS (using IST)
+    const time = `${pad(istTime.getUTCHours())}${pad(istTime.getUTCMinutes())}${pad(istTime.getUTCSeconds())}`;
 
     // Compare NodeMCU date with server date
     let incomingTimestamp = data?.location?.timestamp;
@@ -177,9 +180,12 @@ app.post("/esp8266/upload", async (req, res) => {
     if (incomingTimestamp) {
       // Try to parse the incoming timestamp as a Date
       const incomingDate = new Date(incomingTimestamp);
-      // Compare only the date part (YYYY-MM-DD)
-      const serverDateStr = now.toISOString().slice(0, 10);
-      const incomingDateStr = incomingDate.toISOString().slice(0, 10);
+      // Convert both to IST for comparison
+      const incomingIstTime = new Date(incomingDate.getTime() + istOffset);
+      
+      // Compare only the date part (YYYY-MM-DD) in IST
+      const serverDateStr = istTime.toISOString().slice(0, 10);
+      const incomingDateStr = incomingIstTime.toISOString().slice(0, 10);
 
       if (serverDateStr !== incomingDateStr) {
         useServerTimestamp = true;
@@ -188,9 +194,9 @@ app.post("/esp8266/upload", async (req, res) => {
       useServerTimestamp = true;
     }
 
-    // If mismatch, use server date/time
+    // If mismatch, use server date/time in IST
     const finalTimestamp = useServerTimestamp
-      ? now.toISOString().replace('T', ' ').slice(0, 19) // "YYYY-MM-DD HH:MM:SS"
+      ? istTime.toISOString().replace('T', ' ').slice(0, 19) // "YYYY-MM-DD HH:MM:SS" in IST
       : incomingTimestamp;
 
     const docRef = db
