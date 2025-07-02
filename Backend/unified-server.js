@@ -221,22 +221,30 @@ app.post("/esp8266/upload", async (req, res) => {
 
     console.log(`[ESP8266] Location data saved: (${docData.Latitude}, ${docData.Longitude})`);
     
-    // Also save to Realtime Database at bus/Location path
-    const realtimeData = {
+    // Save location data to Realtime Database at bus/Location path
+    const locationData = {
       Latitude: docData.Latitude || null,
       Longitude: docData.Longitude || null,
       Speed: docData.Speed || null,
       Timestamp: finalTimestamp|| null,
+    };
+
+    // Save distance data to bus/Distance path
+    const distanceData = {
       Distance: docData.Distance || null,
-      // TotalDistance: docData.TotalDistance || null,
       DailyDistance: docData.DailyDistance || null,
     };
 
     try {
-      // Write to Realtime Database
-      const realtimeRef = ref(realtimeDatabase, 'bus/Location');
-      await set(realtimeRef, realtimeData);
+      // Write location data to Realtime Database
+      const locationRef = ref(realtimeDatabase, 'bus/Location');
+      await set(locationRef, locationData);
       console.log(`[ESP8266] Location data saved to Realtime Database: bus/Location`);
+      
+      // Write distance data to Realtime Database
+      const distanceRef = ref(realtimeDatabase, 'bus/Distance');
+      await set(distanceRef, distanceData);
+      console.log(`[ESP8266] Distance data saved to Realtime Database: bus/Distance`);
     } catch (realtimeError) {
       console.error("[ESP8266] Error saving to Realtime Database:", realtimeError);
       // Continue execution - don't fail the entire request if Realtime DB fails
