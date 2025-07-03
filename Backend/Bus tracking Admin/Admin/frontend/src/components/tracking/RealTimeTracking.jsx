@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, ZoomControl, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { realtimeDatabase as database, ref, onValue, off } from '../../config/firebase';
+import { realtimeDatabase, ref, onValue, off } from '../../config/firebase';
 import { format } from 'date-fns';
 
 // Fix for default marker icons in Leaflet with React
@@ -70,6 +70,7 @@ const RealTimeTracking = () => {
   const [routeNumber, setRouteNumber] = useState('N/A');
   const [totalDistance, setTotalDistance] = useState(0);
   const [remainingDistance, setRemainingDistance] = useState(0);
+  const [connectionStatus, setConnectionStatus] = useState('disconnected');
   const previousPosition = useRef(null);
   const busRef = useRef(null);
 
@@ -101,10 +102,15 @@ const RealTimeTracking = () => {
     let busLocationRef = null;
     
     if (isTracking) {
-      busLocationRef = ref(database, 'bus');
+      console.log('Starting real-time tracking...');
+      setConnectionStatus('connecting');
+      busLocationRef = ref(realtimeDatabase, 'bus');
       
       onValue(busLocationRef, (snapshot) => {
         const data = snapshot.val();
+        console.log('Firebase data received:', data);
+        setConnectionStatus('connected');
+        
         if (data) {
           // Extract location data
           if (data.Location) {
@@ -113,13 +119,27 @@ const RealTimeTracking = () => {
             const speed = data.Location.Speed || 0;
             const timestamp = data.Location.Timestamp;
             
+            console.log('Location data:', { lat, lng, speed, timestamp });
+            
+            // Check if coordinates are valid
+            if (isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) {
+              console.warn('Invalid coordinates received:', { lat, lng });
+              return;
+            }
+            
             // Extract route information
-            const route = data.Location.Route|| 'N/A';
+            const route = data.Location.Route || 'N/A';
             setRouteNumber(route);
             
             // Extract distance information
-            const total = data.Distance.TotalDistance || 0;
-            const remaining = data.Distance.DailyDistance || 0;
+            let total = 0;
+            let remaining = 0;
+            
+            if (data.Distance) {
+              total = data.Distance.TotalDistance || 0;
+              remaining = data.Distance.DailyDistance || 0;
+            }
+            
             setTotalDistance(total);
             setRemainingDistance(remaining);
             
@@ -147,6 +167,8 @@ const RealTimeTracking = () => {
                 totalDistance: total,
                 remainingDistance: remaining
               });
+              
+              console.log('Position updated:', { lat, lng, speed, timestamp });
             } else if (!previousPosition.current) {
               // First position update
               setLastPosition({ lat, lng });
@@ -164,15 +186,28 @@ const RealTimeTracking = () => {
                 totalDistance: total,
                 remainingDistance: remaining
               });
+              
+              console.log('First position set:', { lat, lng, speed, timestamp });
             }
+          } else {
+            console.warn('No Location data found in Firebase response');
           }
+        } else {
+          console.warn('No data received from Firebase');
         }
+      }, (error) => {
+        console.error('Firebase listener error:', error);
+        setConnectionStatus('error');
       });
+    } else {
+      console.log('Tracking stopped');
+      setConnectionStatus('disconnected');
     }
     
     return () => {
       if (busLocationRef) {
         off(busLocationRef);
+        console.log('Firebase listener removed');
       }
     };
   }, [isTracking]);
@@ -308,7 +343,21 @@ const RealTimeTracking = () => {
       
       {/* Map control buttons below the map */}
       <div className="bg-gray-900 backdrop-blur-sm rounded-lg p-3 border-2 border-gray-600 shadow-xl mt-4">
-        <h3 className="text-center text-white text-sm font-semibold mb-2">Map Controls</h3>
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="text-center text-white text-sm font-semibold">Map Controls</h3>
+          <div className="flex items-center space-x-2">
+            <span className={`w-2 h-2 rounded-full ${
+              connectionStatus === 'connected' ? 'bg-green-500' : 
+              connectionStatus === 'connecting' ? 'bg-yellow-500' : 
+              connectionStatus === 'error' ? 'bg-red-500' : 'bg-gray-500'
+            }`}></span>
+            <span className="text-xs text-gray-300">
+              {connectionStatus === 'connected' ? 'Connected' : 
+               connectionStatus === 'connecting' ? 'Connecting...' : 
+               connectionStatus === 'error' ? 'Error' : 'Disconnected'}
+            </span>
+          </div>
+        </div>
         <div className="flex flex-wrap justify-center gap-3">
           <button 
             className={`p-2 ${isTracking ? 'bg-red-600' : 'bg-green-600'} rounded-lg hover:opacity-90 transition-colors text-white text-sm flex items-center`}
@@ -508,6 +557,19 @@ const RealTimeTracking = () => {
           </div>
         </div>
       </div>
+      
+      {/* Debug Section - Remove this in production */}
+      {isTracking && (
+        <div className="bg-gray-900 backdrop-blur-sm rounded-lg p-3 border-2 border-gray-600 shadow-xl mt-4">
+          <h3 className="text-center text-white text-sm font-semibold mb-2">Debug Information</h3>
+          <div className="text-xs text-gray-300 space-y-1">
+            <p>Connection Status: {connectionStatus}</p>
+            <p>Bus Data: {busData ? JSON.stringify(busData, null, 2) : 'No data'}</p>
+            <p>Last Position: {lastPosition ? `${lastPosition.lat}, ${lastPosition.lng}` : 'None'}</p>
+            <p>Is Tracking: {isTracking ? 'Yes' : 'No'}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
