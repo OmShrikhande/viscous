@@ -15,6 +15,8 @@ const COLLEGE_STOP_ID = "JIS";
 // Cache for stops data to avoid frequent Firestore access
 let stopsCache = null;
 let lastStopsFetch = null;
+let previousBusLocation = null;
+let currentTravelDirection = 'forward'; // 'forward', 'backward', or 'unknown'
 
 // Function to clear the stops cache
 const clearStopsCache = () => {
@@ -193,6 +195,47 @@ const markStopAsReached = async (stopId) => {
 };
 
 /**
+ * Detect travel direction based on bus location history
+ * @param {Object} currentLocation - Current bus location
+ * @param {Object} previousLocation - Previous bus location
+ * @param {Array} stops - Array of stops
+ * @returns {String} - 'forward', 'backward', or 'unknown'
+ */
+const detectTravelDirection = (currentLocation, previousLocation, stops) => {
+  if (!currentLocation || !previousLocation || !stops || stops.length === 0) {
+    return 'unknown';
+  }
+
+  // Find the JIS stop (College stop)
+  const jisStop = stops.find(stop => stop.id === COLLEGE_STOP_ID);
+  if (!jisStop) {
+    return 'unknown';
+  }
+
+  const jisLocation = {
+    latitude: jisStop.Latitude,
+    longitude: jisStop.Longitude
+  };
+
+  // Calculate distances to JIS from current and previous locations
+  const currentDistanceToJIS = calculateDistance(currentLocation, jisLocation);
+  const previousDistanceToJIS = calculateDistance(previousLocation, jisLocation);
+
+  // If we're moving away from JIS, we're going backward
+  // If we're moving toward JIS, we're going forward
+  if (currentDistanceToJIS > previousDistanceToJIS) {
+    console.log('Direction: BACKWARD (moving away from JIS)');
+    return 'backward';
+  } else if (currentDistanceToJIS < previousDistanceToJIS) {
+    console.log('Direction: FORWARD (moving toward JIS)');
+    return 'forward';
+  }
+
+  // If distances are similar, maintain current direction
+  return currentTravelDirection;
+};
+
+/**
  * Check if bus has reached any stops and update their status
  * This function only accesses Firestore when a stop is actually matched
  */
@@ -204,6 +247,14 @@ const checkStopsReached = async () => {
       console.log('Cannot check stops: No bus location available');
       return;
     }
+
+    // Detect travel direction if we have previous location
+    if (previousBusLocation) {
+      currentTravelDirection = detectTravelDirection(busLocation, previousBusLocation, stopsCache);
+    }
+
+    // Store current location as previous for next iteration
+    previousBusLocation = { ...busLocation };
     
     // Load stops data from memory (this doesn't access Firestore)
     // If we don't have stops data in memory yet, load it once
@@ -242,7 +293,7 @@ const checkStopsReached = async () => {
       // Check if bus is within radius of JIS stop
       if (distanceToJIS <= STOP_RADIUS) {
         isAtJISStop = true;
-        console.log(`BUS IS AT JIS STOP: (distance: ${distanceToJIS}m)`);
+        console.log(`BUS IS AT JIS STOP: (distance: ${distanceToJIS}m), Direction: ${currentTravelDirection}`);
         
         // If JIS is not already marked as reached, mark it
         // This will access Firestore, but only because we need to update it
@@ -251,10 +302,15 @@ const checkStopsReached = async () => {
           await markStopAsReached(COLLEGE_STOP_ID);
         }
         
-        // Reset all other stops regardless of whether JIS was already reached
-        // This will access Firestore, but only because we need to update it
-        console.log('Bus at JIS location - Resetting all other stops...');
-        await resetAllStopsExceptCollege();
+        // Only reset other stops if we're traveling forward (toward JIS)
+        // If we're traveling backward (away from JIS), don't reset other stops
+        // This prevents the issue where the bus gets stuck at JIS when returning
+        if (currentTravelDirection === 'forward') {
+          console.log('Bus at JIS location - Resetting all other stops (forward travel)...');
+          await resetAllStopsExceptCollege();
+        } else {
+          console.log('Bus at JIS location - NOT resetting other stops (backward travel)');
+        }
       }
     }
     

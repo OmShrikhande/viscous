@@ -35,11 +35,13 @@ const MapScreen = () => {
   // State variables
   const [zoom, setZoom] = useState(0.05);
   const [location, setLocation] = useState(null);
+  const [previousLocation, setPreviousLocation] = useState(null);
   const [speed, setSpeed] = useState(null);
   const [timestamp, setTimestamp] = useState(null);
   const [stops, setStops] = useState([]);
   const [isDark, setIsDark] = useState(false);
   const [currentStopSerial, setCurrentStopSerial] = useState(null);
+  const [travelDirection, setTravelDirection] = useState('forward');
   const [selectedStop, setSelectedStop] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [mapReady, setMapReady] = useState(false);
@@ -95,17 +97,21 @@ const MapScreen = () => {
           const currentLoc = { latitude, longitude };
           console.log(`Location update: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
           
+          // Store previous location for direction detection
+          setPreviousLocation(location);
           setLocation(currentLoc);
           setSpeed(data.Speed);
           setTimestamp(data.Timestamp);
           
-          // If we have stops data, determine which stops are nearby
+          // If we have stops data, determine which stops are nearby and travel direction
           if (stops.length > 0) {
-            const nearbyStopSerial = determineNearbyStops(currentLoc, stops);
-            console.log('Nearby stop serial:', nearbyStopSerial);
-            if (nearbyStopSerial !== null) {
-              console.log('Setting current stop serial to:', nearbyStopSerial);
-              setCurrentStopSerial(nearbyStopSerial);
+            const nearbyStopInfo = determineNearbyStops(currentLoc, stops, 1.0, location);
+            console.log('Nearby stop info:', nearbyStopInfo);
+            if (nearbyStopInfo) {
+              console.log('Setting current stop serial to:', nearbyStopInfo.stopSerial);
+              console.log('Travel direction:', nearbyStopInfo.direction);
+              setCurrentStopSerial(nearbyStopInfo.stopSerial);
+              setTravelDirection(nearbyStopInfo.direction);
             }
             
             // If map is ready and we have a reference, animate to the current location
@@ -537,6 +543,7 @@ const MapScreen = () => {
           isDark={isDark}
           stops={stops}
           currentStopSerial={currentStopSerial}
+          travelDirection={travelDirection}
           animStyle={nextStopsAnimStyle}
         />
       )}

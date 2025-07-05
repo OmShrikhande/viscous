@@ -17,6 +17,7 @@ const NextStopsCard = ({
   isDark, 
   stops, 
   currentStopSerial, 
+  travelDirection = 'forward',
   animStyle 
 }) => {
   // Animation for pulsing effect
@@ -82,12 +83,21 @@ const NextStopsCard = ({
     );
   }
 
-  // Get current stop and next stop (if available)
+  // Get current stop and determine next/previous stops based on travel direction
   const currentStop = sortedStops[currentStopIndex];
-  const nextStop = currentStopIndex < sortedStops.length - 1 ? sortedStops[currentStopIndex + 1] : null;
+  let nextStop = null;
+  let prevStop = null;
   
-  // Get previous stop (if available)
-  const prevStop = currentStopIndex > 0 ? sortedStops[currentStopIndex - 1] : null;
+  if (travelDirection === 'backward') {
+    // When traveling backward, the "next" stop is actually the previous one in the sequence
+    // and the "previous" stop is the next one in the sequence
+    nextStop = currentStopIndex > 0 ? sortedStops[currentStopIndex - 1] : null;
+    prevStop = currentStopIndex < sortedStops.length - 1 ? sortedStops[currentStopIndex + 1] : null;
+  } else {
+    // Forward direction (default)
+    nextStop = currentStopIndex < sortedStops.length - 1 ? sortedStops[currentStopIndex + 1] : null;
+    prevStop = currentStopIndex > 0 ? sortedStops[currentStopIndex - 1] : null;
+  }
 
   // Theme colors
   const cardBgColor = isDark ? 'rgba(30, 30, 30, 0.9)' : 'rgba(255, 255, 255, 0.9)';
@@ -162,7 +172,7 @@ const NextStopsCard = ({
                 {nextStop.name}
               </Text>
               <Text style={[styles.stopStatus, styles.nextStopStatus, { color: secondaryTextColor }]}>
-                Next stop
+                {travelDirection === 'backward' ? 'Next stop (returning)' : 'Next stop'}
               </Text>
             </View>
           </View>
