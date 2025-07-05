@@ -2,14 +2,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { onValue, ref } from 'firebase/database';
 import { collection, doc, getDocs, onSnapshot } from 'firebase/firestore';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dimensions,
   SafeAreaView,
   StatusBar,
   StyleSheet
 } from 'react-native';
-import { registerListener, useListenerStatus } from '../../utils/firebaseListenerManager';
 import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 import {
   useAnimatedStyle,
@@ -17,6 +16,7 @@ import {
   withTiming
 } from 'react-native-reanimated';
 import SpeedMonitor from '../../components/tracking/SpeedMonitor';
+import { registerListener } from '../../utils/firebaseListenerManager';
 import { firestoreDb, realtimeDatabase } from './../../configs/FirebaseConfigs';
 
 // Import map components
@@ -40,6 +40,11 @@ const MapScreen = () => {
   const [timestamp, setTimestamp] = useState(null);
   const [stops, setStops] = useState([]);
   const [isDark, setIsDark] = useState(false);
+  
+  // Memoize sorted stops for performance (avoids re-sorting on every render)
+  const sortedStops = useMemo(() => {
+    return [...stops].sort((a, b) => a.serialNumber - b.serialNumber);
+  }, [stops]);
   const [currentStopSerial, setCurrentStopSerial] = useState(null);
   const [travelDirection, setTravelDirection] = useState('forward');
   const [selectedStop, setSelectedStop] = useState(null);
@@ -53,6 +58,11 @@ const MapScreen = () => {
   const slideAnim = useSharedValue(30);
   const mapRef = useRef(null);
   const router = useRouter();
+  
+  // Performance optimization: debounce location updates
+  const locationUpdateTimeoutRef = useRef(null);
+  const lastLocationUpdateRef = useRef(0);
+  const LOCATION_UPDATE_INTERVAL = 2000; // Process location every 2 seconds
 
   // Animation when component mounts
   useEffect(() => {
@@ -103,29 +113,40 @@ const MapScreen = () => {
           setSpeed(data.Speed);
           setTimestamp(data.Timestamp);
           
-          // If we have stops data, determine which stops are nearby and travel direction
-          if (stops.length > 0) {
-            const nearbyStopInfo = determineNearbyStops(currentLoc, stops, 1.0, location);
-            console.log('Nearby stop info:', nearbyStopInfo);
-            if (nearbyStopInfo) {
-              console.log('Setting current stop serial to:', nearbyStopInfo.stopSerial);
-              console.log('Travel direction:', nearbyStopInfo.direction);
-              setCurrentStopSerial(nearbyStopInfo.stopSerial);
-              setTravelDirection(nearbyStopInfo.direction);
-            }
+          // Debounce location processing for better performance with 100+ users
+          const now = Date.now();
+          if (now - lastLocationUpdateRef.current > LOCATION_UPDATE_INTERVAL) {
+            lastLocationUpdateRef.current = now;
             
-            // If map is ready and we have a reference, animate to the current location
-            if (mapReady && mapRef.current) {
-              mapRef.current.animateToRegion({
-                ...currentLoc,
-                latitudeDelta: zoom,
-                longitudeDelta: zoom,
-              }, 1000);
+            // If we have stops data, determine which stops are nearby and travel direction
+            if (sortedStops.length > 0) {
+              const nearbyStopInfo = determineNearbyStops(currentLoc, sortedStops, 1.0, location);
+              if (nearbyStopInfo) {
+                console.log('Setting current stop serial to:', nearbyStopInfo.stopSerial);
+                console.log('Travel direction:', nearbyStopInfo.direction);
+                setCurrentStopSerial(nearbyStopInfo.stopSerial);
+                setTravelDirection(nearbyStopInfo.direction);
+              }
+              
+              // Debounce map animations to prevent excessive re-renders
+              if (locationUpdateTimeoutRef.current) {
+                clearTimeout(locationUpdateTimeoutRef.current);
+              }
+              
+              locationUpdateTimeoutRef.current = setTimeout(() => {
+                if (mapReady && mapRef.current) {
+                  mapRef.current.animateToRegion({
+                    ...currentLoc,
+                    latitudeDelta: zoom,
+                    longitudeDelta: zoom,
+                  }, 1000);
+                }
+              }, 500);
             }
           }
           
           // If we're still loading but have both location and stops data, we can finish loading
-          if (isLoading && stops.length > 0) {
+          if (isLoading && sortedStops.length > 0) {
             setIsLoading(false);
           }
         } catch (error) {
@@ -145,8 +166,13 @@ const MapScreen = () => {
       'foreground' // Only needed when map is visible
     );
     
-    return () => unregisterLocationListener();
-  }, [stops, isLoading, zoom, mapReady]);
+    return () => {
+      unregisterLocationListener();
+      if (locationUpdateTimeoutRef.current) {
+        clearTimeout(locationUpdateTimeoutRef.current);
+      }
+    };
+  }, [sortedStops, isLoading, zoom, mapReady]);
 
   // Load user data from AsyncStorage
   useEffect(() => {
@@ -541,7 +567,7 @@ const MapScreen = () => {
       {!selectedStop && currentStopSerial && (
         <NextStopsCard 
           isDark={isDark}
-          stops={stops}
+          stops={sortedStops}
           currentStopSerial={currentStopSerial}
           travelDirection={travelDirection}
           animStyle={nextStopsAnimStyle}
