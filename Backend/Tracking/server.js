@@ -9,6 +9,7 @@ const {
   resetStopsReached,
   checkMidnightReset
 } = require('./services/locationService');
+const { initConnectionMonitoring } = require('./utils/connectionCheck');
 
 // Initialize Express app
 const app = express();
@@ -259,6 +260,9 @@ const server = app.listen(PORT, () => {
   console.log(`Tracking Server running on port ${PORT}`);
   
   try {
+    // Initialize Firestore connection monitoring
+    const connectionCleanup = initConnectionMonitoring();
+    
     // Start location monitoring (check every 5 seconds)
     const intervals = startLocationMonitoring(5000);
     
@@ -273,6 +277,11 @@ const server = app.listen(PORT, () => {
       clearInterval(intervals.monitoringInterval);
       clearInterval(intervals.midnightCheckInterval);
       
+      // Cleanup connection monitoring
+      if (connectionCleanup) {
+        connectionCleanup();
+      }
+      
       server.close(() => {
         console.log('Server closed');
         process.exit(0);
@@ -286,6 +295,11 @@ const server = app.listen(PORT, () => {
       // Clear all intervals
       clearInterval(intervals.monitoringInterval);
       clearInterval(intervals.midnightCheckInterval);
+      
+      // Cleanup connection monitoring
+      if (connectionCleanup) {
+        connectionCleanup();
+      }
       
       server.close(() => {
         console.log('Server closed');

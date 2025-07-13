@@ -1,13 +1,17 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { collection, getDocs, limit, query } from 'firebase/firestore';
-import { firestoreDb } from '../configs/FirebaseConfigs';
+/**
+ * Backend-compatible Firestore connection checker
+ * This replaces the React Native version that was causing errors
+ */
+
+const { collection, getDocs, limit, query } = require('firebase/firestore');
+const { firestoreDb } = require('../config/firebase');
 
 // Keep track of connection status
 let isConnected = true;
 let lastCheckTime = 0;
-const CHECK_INTERVAL = 60000; // 60 seconds (reduced frequency)
-const CONNECTION_TIMEOUT = 15000; // 15 seconds timeout (increased from 8)
-const MAX_RETRIES = 2; // Reduced retries to prevent spam
+const CHECK_INTERVAL = 30000; // 30 seconds
+const CONNECTION_TIMEOUT = 8000; // 8 seconds timeout
+const MAX_RETRIES = 3;
 let consecutiveFailures = 0;
 
 /**
@@ -15,7 +19,7 @@ let consecutiveFailures = 0;
  * @param {boolean} forceCheck - Force a check even if within the interval
  * @returns {Promise<boolean>} True if connected, false otherwise
  */
-export const checkFirestoreConnection = async (forceCheck = false) => {
+const checkFirestoreConnection = async (forceCheck = false) => {
   const now = Date.now();
   
   // Don't check too frequently unless forced
@@ -35,10 +39,10 @@ export const checkFirestoreConnection = async (forceCheck = false) => {
         setTimeout(() => reject(new Error('Firestore connection check timed out')), CONNECTION_TIMEOUT);
       });
       
-      // Try to fetch a small amount of data from any collection with timeout
+      // Try to fetch a small amount of data from Route2 collection with timeout
       const fetchPromise = async () => {
-        const userDataRef = collection(firestoreDb, 'userdata');
-        const q = query(userDataRef, limit(1));
+        const route2Ref = collection(firestoreDb, 'Route2');
+        const q = query(route2Ref, limit(1));
         return await getDocs(q);
       };
       
@@ -50,65 +54,28 @@ export const checkFirestoreConnection = async (forceCheck = false) => {
       isConnected = true;
       consecutiveFailures = 0;
       
-      // Store connection status
-      try {
-        await AsyncStorage.setItem('firestoreConnected', 'true');
-      } catch (storageError) {
-        console.warn('Could not store connection status:', storageError);
-      }
-      
       return true;
       
     } catch (error) {
-      // Only log if not too many consecutive failures
-      if (consecutiveFailures < 5) {
-        console.warn(`⚠️ Firestore connection check failed (attempt ${attempt}/${MAX_RETRIES}):`, error.message);
-      }
+      console.warn(`⚠️ Firestore connection check failed (attempt ${attempt}/${MAX_RETRIES}):`, error.message);
       
       // If this is not the last attempt, wait before retrying
       if (attempt < MAX_RETRIES) {
-        const delay = Math.min(1000 * attempt, 5000); // Progressive delay, max 5 seconds
-        if (consecutiveFailures < 5) {
-          console.log(`⏳ Retrying in ${delay}ms...`);
-        }
+        const delay = Math.min(1000 * attempt, 3000); // Progressive delay, max 3 seconds
+        console.log(`⏳ Retrying in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
       
       // All attempts failed
+      console.error('❌ All Firestore connection attempts failed:', error.message);
       isConnected = false;
       consecutiveFailures++;
       
-      // Only log if not too many consecutive failures
-      if (consecutiveFailures <= 5) {
-        console.error('❌ All Firestore connection attempts failed:', error.message);
-      } else if (consecutiveFailures === 6) {
-        console.error('❌ Connection failing repeatedly. Further failures will be logged less frequently.');
-      }
-      
-      // Store connection status
-      try {
-        await AsyncStorage.setItem('firestoreConnected', 'false');
-      } catch (storageError) {
-        console.warn('Could not store connection status:', storageError);
-      }
-      
-      // Check if we need to reinitialize Firebase
-      if (error.code === 'app/no-app' || error.message?.includes('app/no-app')) {
-        console.log('🔄 Firebase app not initialized, attempting to reinitialize');
-        // We'll rely on the auto-retry in FirebaseConfigs.js
-      }
-      
-      // If we've had many consecutive failures, increase check interval and reduce logging
-      if (consecutiveFailures >= 3) {
-        console.log('🔄 Multiple consecutive failures, reducing check frequency and logging');
-        lastCheckTime = now + (CHECK_INTERVAL * 3); // Skip next few checks
-        
-        // If too many failures, stop aggressive checking
-        if (consecutiveFailures >= 10) {
-          console.log('⚠️ Too many connection failures, switching to passive mode');
-          lastCheckTime = now + (CHECK_INTERVAL * 10); // Very long delay
-        }
+      // If we've had many consecutive failures, increase check interval
+      if (consecutiveFailures >= 5) {
+        console.log('🔄 Multiple consecutive failures, reducing check frequency');
+        lastCheckTime = now + (CHECK_INTERVAL * 2); // Skip next check
       }
       
       return false;
@@ -122,7 +89,7 @@ export const checkFirestoreConnection = async (forceCheck = false) => {
  * Get the current connection status without performing a check
  * @returns {boolean} Current connection status
  */
-export const getConnectionStatus = () => {
+const getConnectionStatus = () => {
   return isConnected;
 };
 
@@ -132,12 +99,12 @@ export const getConnectionStatus = () => {
  * @param {number} maxRetries - Maximum number of retries (default: 2)
  * @returns {Promise} The result of the operation or throws after retries
  */
-export const executeWithRetry = async (operation, maxRetries = 2) => {
+const executeWithRetry = async (operation, maxRetries = 2) => {
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
     try {
       return await operation();
     } catch (error) {
-      const isConnectionIssue = await handleFirestoreError(error);
+      const isConnectionIssue = isConnectionError(error);
       
       if (isConnectionIssue && attempt <= maxRetries) {
         console.log(`🔄 Retrying Firestore operation (attempt ${attempt}/${maxRetries + 1}) due to connection issue...`);
@@ -158,38 +125,47 @@ export const executeWithRetry = async (operation, maxRetries = 2) => {
 };
 
 /**
+ * Determine if an error is a connection issue
+ * @param {Error} error The error to check
+ * @returns {boolean} True if it's a connection issue, false otherwise
+ */
+const isConnectionError = (error) => {
+  return error.code === 'unavailable' || 
+         error.code === 'resource-exhausted' ||
+         error.code === 'unauthenticated' ||
+         error.code === 'permission-denied' ||
+         error.message?.includes('network') ||
+         error.message?.includes('connection') ||
+         error.message?.includes('transport') ||
+         error.message?.includes('timeout');
+};
+
+/**
  * Handle a Firestore error and determine if it's a connection issue
  * @param {Error} error The error to handle
  * @returns {boolean} True if it's a connection issue, false otherwise
  */
-export const handleFirestoreError = async (error) => {
+const handleFirestoreError = async (error) => {
   console.error('Firestore error:', error);
   
-  // Check if it's a connection error
-  const isConnectionError = 
-    error.code === 'unavailable' || 
-    error.code === 'resource-exhausted' ||
-    error.message?.includes('network') ||
-    error.message?.includes('connection') ||
-    error.message?.includes('transport');
+  const isConnIssue = isConnectionError(error);
   
-  if (isConnectionError) {
+  if (isConnIssue) {
     console.log('Detected Firestore connection issue');
     isConnected = false;
-    await AsyncStorage.setItem('firestoreConnected', 'false');
   }
   
-  return isConnectionError;
+  return isConnIssue;
 };
 
 /**
- * Initialize connection monitoring with improved error handling
+ * Initialize connection monitoring (backend-compatible)
  */
-export const initConnectionMonitoring = () => {
+const initConnectionMonitoring = () => {
   let intervalId;
   
   try {
-    console.log('🔄 Initializing Firestore connection monitoring...');
+    console.log('🔄 Initializing Firestore connection monitoring (Backend)...');
     
     // Check connection at intervals
     intervalId = setInterval(async () => {
@@ -228,4 +204,12 @@ export const initConnectionMonitoring = () => {
       console.warn('⚠️ Error during connection monitoring cleanup:', cleanupError);
     }
   };
+};
+
+module.exports = {
+  checkFirestoreConnection,
+  getConnectionStatus,
+  executeWithRetry,
+  handleFirestoreError,
+  initConnectionMonitoring
 };

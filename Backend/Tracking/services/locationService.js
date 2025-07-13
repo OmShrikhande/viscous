@@ -5,6 +5,7 @@ const { collection, doc, getDoc, getDocs, updateDoc, Timestamp, setDoc } = requi
 const { realtimeDatabase, firestoreDb } = require('./../config/firebase');
 const { isWithinRadius, calculateDistance } = require('../utils/geoUtils');
 const excelStopService = require('./excelStopService');
+const { executeWithRetry, handleFirestoreError } = require('../utils/connectionCheck');
 
 // Radius in meters to consider a stop as reached
 const STOP_RADIUS = 50;
@@ -79,8 +80,10 @@ const getStops = async (forceRefresh = false) => {
     // Reference the Route2 collection
     const route2CollectionRef = collection(firestoreDb, 'Route2');
     
-    // Get all documents in the Route2 collection
-    const querySnapshot = await getDocs(route2CollectionRef);
+    // Get all documents in the Route2 collection with retry logic
+    const querySnapshot = await executeWithRetry(async () => {
+      return await getDocs(route2CollectionRef);
+    });
     
     // Initialize stops array
     const stops = [];
@@ -107,7 +110,11 @@ const getStops = async (forceRefresh = false) => {
     console.log(`FIRESTORE DATA: Fetched ${stops.length} bus stops`);
     return stops;
   } catch (error) {
-    console.log('ERROR: Failed to connect to Firestore');
+    console.error('ERROR: Failed to fetch stops from Firestore:', error);
+    
+    // Handle the error and determine if it's a connection issue
+    await handleFirestoreError(error);
+    
     return stopsCache || []; // Return cache on error if available
   }
 };

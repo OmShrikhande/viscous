@@ -11,6 +11,7 @@ const fs = require('fs');
 const { calculateDistance } = require('../utils/geoUtils');
 const { collection, doc, getDoc, updateDoc, Timestamp, setDoc } = require('firebase/firestore');
 const { firestoreDb } = require('../config/firebase');
+const { executeWithRetry, handleFirestoreError } = require('../utils/connectionCheck');
 
 // Path to the Excel file (relative to project root)
 const EXCEL_FILE_PATH = path.join(__dirname, '../../Route2.xlsx');
@@ -158,8 +159,10 @@ const updateFirestoreWithExcelStop = async (stop) => {
     // Reference the specific document in Route2 collection
     const stopRef = doc(firestoreDb, 'Route2', stopId);
     
-    // Check if the document exists
-    const stopDoc = await getDoc(stopRef);
+    // Check if the document exists with retry logic
+    const stopDoc = await executeWithRetry(async () => {
+      return await getDoc(stopRef);
+    });
     
     // If the stop exists and is already marked as reached, skip it
     if (stopDoc.exists() && stopDoc.data().reached === true) {
@@ -177,27 +180,31 @@ const updateFirestoreWithExcelStop = async (stop) => {
     if (!stopDoc.exists()) {
       console.log(`Stop "${stopId}" does not exist in Firestore, creating it...`);
       
-      // Create the document if it doesn't exist
-      await setDoc(stopRef, {
-        Latitude: stop.Latitude,
-        Longitude: stop.Longitude,
-        Name: stop.stopname || `Stop ${stop.serialNumber}`,
-        reached: true,
-        reachedAt: reachedTimestamp,
-        reachedTime: formattedTime,
-        reachedDate: date.toLocaleDateString(),
-        serialNumber: stop.serialNumber,
-        time: stop.time
+      // Create the document if it doesn't exist with retry logic
+      await executeWithRetry(async () => {
+        return await setDoc(stopRef, {
+          Latitude: stop.Latitude,
+          Longitude: stop.Longitude,
+          Name: stop.stopname || `Stop ${stop.serialNumber}`,
+          reached: true,
+          reachedAt: reachedTimestamp,
+          reachedTime: formattedTime,
+          reachedDate: date.toLocaleDateString(),
+          serialNumber: stop.serialNumber,
+          time: stop.time
+        });
       });
       
       console.log(`Created and marked stop "${stopId}" as reached at ${formattedTime}`);
     } else {
-      // Update the existing document
-      await updateDoc(stopRef, {
-        reached: true,
-        reachedAt: reachedTimestamp,
-        reachedTime: formattedTime,
-        reachedDate: date.toLocaleDateString()
+      // Update the existing document with retry logic
+      await executeWithRetry(async () => {
+        return await updateDoc(stopRef, {
+          reached: true,
+          reachedAt: reachedTimestamp,
+          reachedTime: formattedTime,
+          reachedDate: date.toLocaleDateString()
+        });
       });
       
       console.log(`Stop "${stopId}" marked as reached at ${formattedTime}`);
@@ -223,6 +230,10 @@ const updateFirestoreWithExcelStop = async (stop) => {
   } catch (error) {
     const stopId = stop.stopname || `Stop${stop.serialNumber}`;
     console.error(`Error updating Firestore for stop "${stopId}":`, error);
+    
+    // Handle the error and determine if it's a connection issue
+    await handleFirestoreError(error);
+    
     return false;
   }
 };
