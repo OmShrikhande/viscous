@@ -1,4 +1,8 @@
 {
+  "cli": {
+    "version": ">= 5.9.1",
+    "requireCommit": false
+  },
   "build": {
     "preview": {
       "android": {
@@ -46,8 +50,7 @@
       }
     }
   },
-  "cli": {
-    "version": ">= 5.9.1",
-    "requireCommit": false
+  "submit": {
+    "production": {}
   }
 }
