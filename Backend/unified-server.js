@@ -157,6 +157,29 @@ app.get('/', (req, res) => {
 
 // ===== ESP8266 SERVER ROUTES =====
 
+// Store last sent location data to avoid sending duplicate data
+let lastSentLocationData = {
+  latitude: null,
+  longitude: null,
+  speed: null,
+  dailyDistance: null,
+  lastSentTime: null
+};
+
+// Function to check if location data has changed significantly
+const hasLocationChanged = (newData, threshold = 0.0001) => {
+  if (!lastSentLocationData.latitude || !lastSentLocationData.longitude) {
+    return true; // First time sending data
+  }
+  
+  const latDiff = Math.abs(newData.latitude - lastSentLocationData.latitude);
+  const lngDiff = Math.abs(newData.longitude - lastSentLocationData.longitude);
+  const speedDiff = Math.abs((newData.speed || 0) - (lastSentLocationData.speed || 0));
+  const distanceDiff = Math.abs((newData.dailyDistance || 0) - (lastSentLocationData.dailyDistance || 0));
+  
+  return latDiff > threshold || lngDiff > threshold || speedDiff > 0.1 || distanceDiff > 0.1;
+};
+
 // ESP8266 Server endpoint
 app.post("/esp8266/upload", async (req, res) => {
   try {
@@ -205,7 +228,7 @@ app.post("/esp8266/upload", async (req, res) => {
       .collection("entries")
       .doc(time);
 
-    // Build the Firestore document, only including defined fields
+    // Build the document data, only including defined fields
     const docData = {
       ServerTimestamp: admin.firestore.FieldValue.serverTimestamp(),
     };
@@ -215,41 +238,94 @@ app.post("/esp8266/upload", async (req, res) => {
     docData.Timestamp = finalTimestamp; // Always set, either from NodeMCU or server
     if (data?.dailyDistance !== undefined) docData.DailyDistance = data.dailyDistance;
 
-    await docRef.set(docData);
-
-    console.log(`[ESP8266] Location data saved: (${docData.Latitude}, ${docData.Longitude})`);
+    // ===== DUPLICATE DATA CHECK =====
+    // Check if the same data is coming continuously for 1 minute
+    const currentTime = Date.now();
+    const oneMinute = 60 * 1000; // 1 minute in milliseconds
     
-    // Also save to Realtime Database at bus/Location path
-    // ===== REPLACE YOUR EXISTING REALTIME DATABASE LOGIC WITH THIS =====
+    const newLocationData = {
+      latitude: docData.Latitude,
+      longitude: docData.Longitude,
+      speed: docData.Speed,
+      dailyDistance: docData.DailyDistance
+    };
+    
+    // Check if data has changed or if 1 minute has passed
+    const dataChanged = hasLocationChanged(newLocationData);
+    const timeElapsed = !lastSentLocationData.lastSentTime || 
+                       (currentTime - lastSentLocationData.lastSentTime) >= oneMinute;
+    
+    if (!dataChanged && !timeElapsed) {
+      console.log(`[ESP8266] 🔄 Duplicate data detected, skipping Firebase operations. Time since last sent: ${Math.round((currentTime - lastSentLocationData.lastSentTime) / 1000)}s`);
+      res.status(200).send("Data received but not sent (duplicate)");
+      return;
+    }
+    
+    // Log the reason for sending data
+    if (dataChanged) {
+      console.log(`[ESP8266] 📍 Location data changed, proceeding with Firebase operations`);
+    } else if (timeElapsed) {
+      console.log(`[ESP8266] ⏰ 1 minute elapsed, sending data to Firebase`);
+    }
 
-try {
-  // Write Location data
-  const realtimeLocationData = {
-    Latitude: docData.Latitude || null,
-    Longitude: docData.Longitude || null,
-    Speed: docData.Speed || null,
-    Timestamp: finalTimestamp || null
-  };
+    // ===== MODIFIED FLOW: REALTIME DATABASE FIRST, THEN FIRESTORE =====
+    
+    // STEP 1: Save to Realtime Database FIRST
+    console.log(`[ESP8266] Step 1: Saving to Realtime Database first...`);
+    
+    try {
+      // Write Location data to Realtime Database
+      const realtimeLocationData = {
+        Latitude: docData.Latitude || null,
+        Longitude: docData.Longitude || null,
+        Speed: docData.Speed || null,
+        Timestamp: finalTimestamp || null
+      };
 
-  const locationRef = ref(realtimeDatabase, 'bus/Location');
-  await set(locationRef, realtimeLocationData);
-  console.log(`[ESP8266] Location data saved to Realtime Database: bus/Location`);
-} catch (error) {
-  console.error("[ESP8266] Error saving Location to Realtime Database:", error);
-}
+      const locationRef = ref(realtimeDatabase, 'bus/Location');
+      await set(locationRef, realtimeLocationData);
+      console.log(`[ESP8266] ✅ Location data saved to Realtime Database: bus/Location`);
+    } catch (error) {
+      console.error("[ESP8266] ❌ Error saving Location to Realtime Database:", error);
+      throw error; // Stop the process if Realtime Database fails
+    }
 
-try {
-  // Write DailyDistance data
-  const realtimeDistanceData = {
-    DailyDistance: docData.DailyDistance || null,
-  };
+    try {
+      // Write DailyDistance data to Realtime Database
+      const realtimeDistanceData = {
+        DailyDistance: docData.DailyDistance || null,
+      };
 
-  const distanceRef = ref(realtimeDatabase, 'bus/Distance');
-  await set(distanceRef, realtimeDistanceData);
-  console.log(`[ESP8266] DailyDistance saved to Realtime Database: bus/Distance/DailyDistance`);
-} catch (error) {
-  console.error("[ESP8266] Error saving DailyDistance to Realtime Database:", error);
-}
+      const distanceRef = ref(realtimeDatabase, 'bus/Distance');
+      await set(distanceRef, realtimeDistanceData);
+      console.log(`[ESP8266] ✅ DailyDistance saved to Realtime Database: bus/Distance/DailyDistance`);
+    } catch (error) {
+      console.error("[ESP8266] ❌ Error saving DailyDistance to Realtime Database:", error);
+      throw error; // Stop the process if Realtime Database fails
+    }
+
+    // STEP 2: Save to Firestore AFTER Realtime Database
+    console.log(`[ESP8266] Step 2: Saving to Firestore after Realtime Database...`);
+    
+    try {
+      await docRef.set(docData);
+      console.log(`[ESP8266] ✅ Location data saved to Firestore: (${docData.Latitude}, ${docData.Longitude})`);
+    } catch (error) {
+      console.error("[ESP8266] ❌ Error saving to Firestore:", error);
+      // Don't throw error here - Realtime Database already saved successfully
+    }
+    
+    // ===== UPDATE LAST SENT DATA =====
+    // Update the last sent location data and timestamp
+    lastSentLocationData = {
+      latitude: docData.Latitude,
+      longitude: docData.Longitude,
+      speed: docData.Speed,
+      dailyDistance: docData.DailyDistance,
+      lastSentTime: currentTime
+    };
+    
+    console.log(`[ESP8266] 💾 Updated last sent location data cache`);
     res.status(200).send("Data uploaded successfully!");
   } catch (error) {
     console.error("[ESP8266] Error:", error);
