@@ -1,13 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { collection, getDocs, limit, query } from 'firebase/firestore';
-import { firestoreDb } from '../configs/FirebaseConfigs';
+import connectionManager, { getConnectionStatus } from './firebaseConnectionManager';
 
 // Keep track of connection status
 let isConnected = true;
 let lastCheckTime = 0;
-const CHECK_INTERVAL = 60000; // 60 seconds (reduced frequency)
-const CONNECTION_TIMEOUT = 15000; // 15 seconds timeout (increased from 8)
-const MAX_RETRIES = 2; // Reduced retries to prevent spam
+const CHECK_INTERVAL = 30000; // 30 seconds (reduced from 60)
+const CONNECTION_TIMEOUT = 10000; // 10 seconds timeout (reduced from 15)
+const MAX_RETRIES = 3; // Increased retries with better connection manager
 let consecutiveFailures = 0;
 
 /**
@@ -37,6 +37,7 @@ export const checkFirestoreConnection = async (forceCheck = false) => {
       
       // Try to fetch a small amount of data from any collection with timeout
       const fetchPromise = async () => {
+        const firestoreDb = connectionManager.getFirestore();
         const userDataRef = collection(firestoreDb, 'userdata');
         const q = query(userDataRef, limit(1));
         return await getDocs(q);
@@ -96,7 +97,8 @@ export const checkFirestoreConnection = async (forceCheck = false) => {
       // Check if we need to reinitialize Firebase
       if (error.code === 'app/no-app' || error.message?.includes('app/no-app')) {
         console.log('🔄 Firebase app not initialized, attempting to reinitialize');
-        // We'll rely on the auto-retry in FirebaseConfigs.js
+        // Force a reconnection through the connection manager
+        connectionManager.forceReconnect();
       }
       
       // If we've had many consecutive failures, increase check interval and reduce logging
