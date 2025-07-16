@@ -14,7 +14,7 @@ const mongoose = require('mongoose');
 const admin = require('firebase-admin');
 const { initializeApp } = require('firebase/app');
 const { getFirestore } = require('firebase/firestore');
-const { getDatabase, ref, set } = require('firebase/database');
+const { getDatabase, ref, set, onValue, off, get } = require('firebase/database');
 const path = require('path');
 const fs = require('fs');
 const dotenv = require('dotenv');
@@ -97,6 +97,162 @@ const realtimeDatabase = getDatabase(firebaseApp);
 
 console.log('Firebase initialized successfully');
 
+// ===== REALTIME DATABASE LISTENER =====
+
+let lastProcessedTimestamp = null;
+
+/**
+ * Process data from Realtime Database and store in Firestore
+ * @param {Object} data - The data from Firebase Realtime Database
+ */
+const processRealtimeData = async (data) => {
+  try {
+    if (!data || !data.location) {
+      console.log('[Realtime Listener] No valid location data received');
+      return;
+    }
+
+    const locationData = data.location;
+    const dailyDistance = data.dailyDistance || data.distance?.DailyDistance;
+
+    // Check if this is new data by comparing timestamps
+    const currentTimestamp = locationData.timestamp || locationData.Timestamp;
+    if (lastProcessedTimestamp && currentTimestamp === lastProcessedTimestamp) {
+      console.log('[Realtime Listener] Data already processed, skipping...');
+      return;
+    }
+
+    // Update last processed timestamp
+    lastProcessedTimestamp = currentTimestamp;
+
+    // Get current time in IST (UTC+5:30)
+    const now = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+    const istTime = new Date(now.getTime() + istOffset);
+    const pad = (n) => n.toString().padStart(2, "0");
+
+    // Format: DDMMYY (using IST)
+    const date = `${pad(istTime.getUTCDate())}${pad(istTime.getUTCMonth() + 1)}${istTime.getUTCFullYear().toString().slice(2)}`;
+    // Format: HHMMSS (using IST)
+    const time = `${pad(istTime.getUTCHours())}${pad(istTime.getUTCMinutes())}${pad(istTime.getUTCSeconds())}`;
+
+    // Compare incoming timestamp with server timestamp
+    let incomingTimestamp = currentTimestamp;
+    let useServerTimestamp = false;
+
+    if (incomingTimestamp) {
+      // Try to parse the incoming timestamp as a Date
+      const incomingDate = new Date(incomingTimestamp);
+      // Convert both to IST for comparison
+      const incomingIstTime = new Date(incomingDate.getTime() + istOffset);
+      
+      // Compare only the date part (YYYY-MM-DD) in IST
+      const serverDateStr = istTime.toISOString().slice(0, 10);
+      const incomingDateStr = incomingIstTime.toISOString().slice(0, 10);
+
+      if (serverDateStr !== incomingDateStr) {
+        useServerTimestamp = true;
+      }
+    } else {
+      useServerTimestamp = true;
+    }
+
+    // If mismatch, use server date/time in IST
+    const finalTimestamp = useServerTimestamp
+      ? istTime.toISOString().replace('T', ' ').slice(0, 19) // "YYYY-MM-DD HH:MM:SS" in IST
+      : incomingTimestamp;
+
+    const docRef = db
+      .collection("locationhistory")
+      .doc(date)
+      .collection("entries")
+      .doc(time);
+
+    // Build the Firestore document, only including defined fields
+    const docData = {
+      ServerTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    
+    if (locationData.latitude !== undefined || locationData.Latitude !== undefined) {
+      docData.Latitude = locationData.latitude || locationData.Latitude;
+    }
+    if (locationData.longitude !== undefined || locationData.Longitude !== undefined) {
+      docData.Longitude = locationData.longitude || locationData.Longitude;
+    }
+    if (locationData.speed !== undefined || locationData.Speed !== undefined) {
+      docData.Speed = locationData.speed || locationData.Speed;
+    }
+    docData.Timestamp = finalTimestamp; // Always set, either from device or server
+    
+    if (dailyDistance !== undefined) {
+      docData.DailyDistance = dailyDistance;
+    }
+
+    await docRef.set(docData);
+    console.log(`[Realtime Listener] Location data saved to Firestore: (${docData.Latitude}, ${docData.Longitude})`);
+    
+  } catch (error) {
+    console.error("[Realtime Listener] Error processing data:", error);
+  }
+};
+
+/**
+ * Start monitoring Firebase Realtime Database for new data
+ */
+const startRealtimeListener = () => {
+  try {
+    console.log('[Realtime Listener] Starting Firebase Realtime Database listener...');
+    
+    // Listen to the bus/location path for new data
+    const locationRef = ref(realtimeDatabase, 'bus');
+    
+    onValue(locationRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        console.log('[Realtime Listener] New data received from Realtime Database:', JSON.stringify(data, null, 2));
+        processRealtimeData(data);
+      } else {
+        console.log('[Realtime Listener] No data available in Realtime Database');
+      }
+    }, (error) => {
+      console.error('[Realtime Listener] Error listening to Realtime Database:', error);
+    });
+    
+    console.log('[Realtime Listener] Successfully started monitoring bus data');
+  } catch (error) {
+    console.error('[Realtime Listener] Error starting listener:', error);
+  }
+};
+
+/**
+ * Stop monitoring Firebase Realtime Database
+ */
+const stopRealtimeListener = () => {
+  try {
+    const locationRef = ref(realtimeDatabase, 'bus');
+    off(locationRef);
+    console.log('[Realtime Listener] Stopped monitoring Firebase Realtime Database');
+  } catch (error) {
+    console.error('[Realtime Listener] Error stopping listener:', error);
+  }
+};
+
+// Start the realtime listener
+startRealtimeListener();
+
+// Handle graceful shutdown
+process.on('SIGINT', () => {
+  console.log('Received SIGINT, gracefully shutting down...');
+  stopRealtimeListener();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('Received SIGTERM, gracefully shutting down...');
+  stopRealtimeListener();
+  process.exit(0);
+});
+
 // ===== MONGODB CONNECTION =====
 
 // Connect to MongoDB if MONGO_URI is provided, but make it optional
@@ -146,114 +302,86 @@ app.get('/', (req, res) => {
   res.status(200).json({
     message: 'Bus Tracking Unified Server',
     status: 'running',
+    architecture: {
+      dataFlow: [
+        "ESP8266 Device → Firebase Realtime Database",
+        "Server monitors Realtime Database → Processes to Firestore",
+        "Tracking Server → Monitors location and updates stops",
+        "Admin Backend → Provides API and frontend"
+      ]
+    },
     endpoints: {
       health: '/health',
-      esp8266: '/esp8266',
+      esp8266Status: '/esp8266/status',
+      esp8266Process: '/esp8266/process',
       tracking: '/tracking',
       admin: '/api'
+    },
+    realtimeListener: {
+      status: 'active',
+      monitoring: 'bus/ path in Firebase Realtime Database',
+      lastProcessed: lastProcessedTimestamp
     }
   });
 });
 
 // ===== ESP8266 SERVER ROUTES =====
+// Note: ESP8266 now writes directly to Firebase Realtime Database
+// The server monitors Realtime Database and processes data to Firestore
 
-// ESP8266 Server endpoint
-app.post("/esp8266/upload", async (req, res) => {
-  try {
-    const data = req.body;
-
-    // Get current time in IST (UTC+5:30)
-    const now = new Date();
-    const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
-    const istTime = new Date(now.getTime() + istOffset);
-    const pad = (n) => n.toString().padStart(2, "0");
-
-    // Format: DDMMYY (using IST)
-    const date = `${pad(istTime.getUTCDate())}${pad(istTime.getUTCMonth() + 1)}${istTime.getUTCFullYear().toString().slice(2)}`;
-    // Format: HHMMSS (using IST)
-    const time = `${pad(istTime.getUTCHours())}${pad(istTime.getUTCMinutes())}${pad(istTime.getUTCSeconds())}`;
-
-    // Compare NodeMCU date with server date
-    let incomingTimestamp = data?.location?.timestamp;
-    let useServerTimestamp = false;
-
-    if (incomingTimestamp) {
-      // Try to parse the incoming timestamp as a Date
-      const incomingDate = new Date(incomingTimestamp);
-      // Convert both to IST for comparison
-      const incomingIstTime = new Date(incomingDate.getTime() + istOffset);
-      
-      // Compare only the date part (YYYY-MM-DD) in IST
-      const serverDateStr = istTime.toISOString().slice(0, 10);
-      const incomingDateStr = incomingIstTime.toISOString().slice(0, 10);
-
-      if (serverDateStr !== incomingDateStr) {
-        useServerTimestamp = true;
-      }
-    } else {
-      useServerTimestamp = true;
+// ESP8266 Server status endpoint (for monitoring)
+app.get("/esp8266/status", (req, res) => {
+  res.json({
+    status: "active",
+    message: "ESP8266 service is monitoring Firebase Realtime Database",
+    listener: "active",
+    lastProcessedTimestamp: lastProcessedTimestamp,
+    realtimeDatabase: {
+      connected: true,
+      path: "bus/",
+      description: "ESP8266 should write directly to Firebase Realtime Database at 'bus/' path"
+    },
+    dataFlow: {
+      step1: "ESP8266 Device → Firebase Realtime Database (bus/)",
+      step2: "Server monitors → Realtime Database",
+      step3: "Server processes → Firestore (locationhistory collection)",
+      step4: "Continue normal tracking process"
     }
+  });
+});
 
-    // If mismatch, use server date/time in IST
-    const finalTimestamp = useServerTimestamp
-      ? istTime.toISOString().replace('T', ' ').slice(0, 19) // "YYYY-MM-DD HH:MM:SS" in IST
-      : incomingTimestamp;
-
-    const docRef = db
-      .collection("locationhistory")
-      .doc(date)
-      .collection("entries")
-      .doc(time);
-
-    // Build the Firestore document, only including defined fields
-    const docData = {
-      ServerTimestamp: admin.firestore.FieldValue.serverTimestamp(),
-    };
-    if (data?.location?.latitude !== undefined) docData.Latitude = data.location.latitude;
-    if (data?.location?.longitude !== undefined) docData.Longitude = data.location.longitude;
-    if (data?.location?.speed !== undefined) docData.Speed = data.location.speed;
-    docData.Timestamp = finalTimestamp; // Always set, either from NodeMCU or server
-    if (data?.dailyDistance !== undefined) docData.DailyDistance = data.dailyDistance;
-
-    await docRef.set(docData);
-
-    console.log(`[ESP8266] Location data saved: (${docData.Latitude}, ${docData.Longitude})`);
+// Manual trigger to process current data from Realtime Database
+app.post("/esp8266/process", async (req, res) => {
+  try {
+    console.log('[ESP8266] Manual trigger to process current Realtime Database data');
     
-    // Also save to Realtime Database at bus/Location path
-    // ===== REPLACE YOUR EXISTING REALTIME DATABASE LOGIC WITH THIS =====
-
-try {
-  // Write Location data
-  const realtimeLocationData = {
-    Latitude: docData.Latitude || null,
-    Longitude: docData.Longitude || null,
-    Speed: docData.Speed || null,
-    Timestamp: finalTimestamp || null
-  };
-
-  const locationRef = ref(realtimeDatabase, 'bus/Location');
-  await set(locationRef, realtimeLocationData);
-  console.log(`[ESP8266] Location data saved to Realtime Database: bus/Location`);
-} catch (error) {
-  console.error("[ESP8266] Error saving Location to Realtime Database:", error);
-}
-
-try {
-  // Write DailyDistance data
-  const realtimeDistanceData = {
-    DailyDistance: docData.DailyDistance || null,
-  };
-
-  const distanceRef = ref(realtimeDatabase, 'bus/Distance');
-  await set(distanceRef, realtimeDistanceData);
-  console.log(`[ESP8266] DailyDistance saved to Realtime Database: bus/Distance/DailyDistance`);
-} catch (error) {
-  console.error("[ESP8266] Error saving DailyDistance to Realtime Database:", error);
-}
-    res.status(200).send("Data uploaded successfully!");
+    const busRef = ref(realtimeDatabase, 'bus');
+    const snapshot = await get(busRef);
+    
+    if (snapshot.exists()) {
+      const data = snapshot.val();
+      console.log('[ESP8266] Current data in Realtime Database:', JSON.stringify(data, null, 2));
+      
+      // Process the data
+      await processRealtimeData(data);
+      
+      res.json({
+        success: true,
+        message: "Data processed successfully",
+        data: data
+      });
+    } else {
+      res.json({
+        success: false,
+        message: "No data found in Realtime Database"
+      });
+    }
   } catch (error) {
-    console.error("[ESP8266] Error:", error);
-    res.status(500).send("Server error: " + error.message);
+    console.error("[ESP8266] Error processing manual trigger:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error: " + error.message
+    });
   }
 });
 
