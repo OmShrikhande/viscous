@@ -38,6 +38,8 @@ try {
       firestoreDb = getFirestore(firebaseApp);
       realtimeDatabase = getDatabase(firebaseApp);
       console.log("Firebase services initialized successfully");
+      console.log("Firestore DB:", !!firestoreDb);
+      console.log("Realtime Database:", !!realtimeDatabase);
       return true;
     } catch (error) {
       console.error(`Error initializing Firebase services (attempt ${retryCount + 1}/${maxRetries}):`, error);

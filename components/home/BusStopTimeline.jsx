@@ -4,17 +4,18 @@ import { onValue, ref } from 'firebase/database';
 import { collection, getDocs, onSnapshot } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Dimensions,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Dimensions,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { firestoreDb, realtimeDatabase } from '../../configs/FirebaseConfigs';
 import { checkFirestoreConnection, handleFirestoreError } from '../../utils/firebaseConnectionCheck';
+import { debugRealtimeStructure, debugRouteData } from '../../utils/firebaseDebugger';
 import { registerListener } from '../../utils/firebaseListenerManager';
 
 const BusStopTimeline = ({ isDark, refreshing }) => {
@@ -34,6 +35,10 @@ const BusStopTimeline = ({ isDark, refreshing }) => {
   const loadRouteStopsData = async (routeNumber) => {
     try {
       setIsLoading(true);
+      
+      // Run debug checks for this route
+      console.log(`🔍 BusStopTimeline - Loading route ${routeNumber} data...`);
+      await debugRouteData(routeNumber);
       
       // Check connection first
       const isConnected = await checkFirestoreConnection();
@@ -61,7 +66,7 @@ const BusStopTimeline = ({ isDark, refreshing }) => {
         
         // Sort stops by serialNumber if available, then by order as fallback
         const sortedStops = stops.sort((a, b) => {
-          // First try to sort by serialNumber
+          // First try to sort by serialNumber (match backend structure)
           if (a.data.serialNumber !== undefined && b.data.serialNumber !== undefined) {
             return a.data.serialNumber - b.data.serialNumber;
           }
@@ -82,9 +87,10 @@ const BusStopTimeline = ({ isDark, refreshing }) => {
         
         // Create a single listener for the entire route collection
         const routeRef = collection(firestoreDb, `Route${routeNumber}`);
+        console.log(`BusStopTimeline - Setting up Firestore listener for collection: Route${routeNumber}`);
         const routeListener = onSnapshot(routeRef, (snapshot) => {
           try {
-            console.log(`Received snapshot for Route${routeNumber} with ${snapshot.docs.length} documents`);
+            console.log(`BusStopTimeline - Received snapshot for Route${routeNumber} with ${snapshot.docs.length} documents`);
             
             // Process all changes in a batch for better performance
             const updatedStops = {};
@@ -99,10 +105,11 @@ const BusStopTimeline = ({ isDark, refreshing }) => {
                 const stopName = doc.id;
                 
                 // Log each stop's reached status for debugging
-                console.log(`Stop ${stopName} data:`, JSON.stringify({
+                console.log(`BusStopTimeline - Stop ${stopName} data:`, JSON.stringify({
                   reached: stopData.reached,
                   reachedTime: stopData.reachedTime,
-                  serialNumber: stopData.serialNumber || stopData.order || 0
+                  serialNumber: stopData.serialNumber || stopData.order || 0,
+                  allFields: Object.keys(stopData)
                 }));
                 
                 // Check for reached status in multiple ways to be more flexible
@@ -305,11 +312,18 @@ const BusStopTimeline = ({ isDark, refreshing }) => {
     if (!userRouteNumber || routeStops.length === 0) return;
 
     console.log(`Setting up bus location listener for route ${userRouteNumber}`);
-    const locationRef = ref(realtimeDatabase, 'Location');
+    
+    // Debug the realtime database structure
+    debugRealtimeStructure().catch(error => {
+      console.error('Debug realtime structure failed:', error);
+    });
+    
+    const locationRef = ref(realtimeDatabase, 'bus/Location');
     
     const locationListener = onValue(locationRef, (snapshot) => {
       const locationData = snapshot.val();
-      if (locationData) {
+      console.log('BusStopTimeline - Raw location data:', locationData);
+      if (locationData && locationData.Latitude && locationData.Longitude) {
         // Update bus location state
         setBusLocation({
           latitude: locationData.Latitude,
@@ -319,10 +333,13 @@ const BusStopTimeline = ({ isDark, refreshing }) => {
         });
         
         // Log the location update
-        console.log(`Bus location update: Lat ${locationData.Latitude.toFixed(6)}, Lng ${locationData.Longitude.toFixed(6)}, Time: ${new Date(locationData.Timestamp).toLocaleTimeString()}`);
+        console.log(`Bus location update: Lat ${locationData.Latitude.toFixed(6)}, Lng ${locationData.Longitude.toFixed(6)}, Time: ${locationData.Timestamp}`);
+      } else {
+        console.warn('BusStopTimeline - Incomplete location data received:', locationData);
       }
     }, (error) => {
       console.error('Error in bus location listener:', error);
+      console.error('Database path attempted:', 'bus/Location');
       setError('Failed to get bus location updates');
     });
     

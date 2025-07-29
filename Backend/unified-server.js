@@ -131,13 +131,54 @@ app.get('/health', (req, res) => {
   const uptimeMinutes = Math.floor((uptime % 3600) / 60);
   const uptimeSeconds = Math.floor(uptime % 60);
   
+  // Get service statuses
+  let enhancedLocationStatus = 'unknown';
+  let bidirectionalTrackingStatus = 'unknown';
+  
+  try {
+    const enhancedStats = enhancedLocationService.getStats();
+    enhancedLocationStatus = enhancedStats.isActive ? 'active' : 'inactive';
+  } catch (error) {
+    enhancedLocationStatus = 'error';
+  }
+  
+  try {
+    const bidirectionalStats = bidirectionalTrackingService.getStats();
+    bidirectionalTrackingStatus = bidirectionalStats.isActive ? 'active' : 'inactive';
+  } catch (error) {
+    bidirectionalTrackingStatus = 'error';
+  }
+  
   res.status(200).json({
     status: 'OK',
-    message: 'Server is running',
+    message: 'Unified Bus Tracking Server is running',
     timestamp: new Date().toISOString(),
     uptime: `${uptimeHours}h ${uptimeMinutes}m ${uptimeSeconds}s`,
     port: PORT,
-    services: ['ESP8266', 'Tracking', 'Admin Backend']
+    services: {
+      'ESP8266 Server': 'active',
+      'Tracking Server': 'active', 
+      'Admin Backend': 'active',
+      'Enhanced Location Service': enhancedLocationStatus,
+      'Bidirectional Tracking Service': bidirectionalTrackingStatus
+    },
+    endpoints: {
+      esp8266: '/esp8266/upload',
+      tracking: '/tracking/api',
+      admin: '/api',
+      health: '/health',
+      keepAlive: '/keep-alive'
+    }
+  });
+});
+
+// Dedicated keep-alive endpoint for external monitoring (lightweight)
+app.get('/keep-alive', (req, res) => {
+  res.status(200).json({
+    status: 'alive',
+    timestamp: new Date().toISOString(),
+    uptime: Math.floor(process.uptime()),
+    message: 'Server is alive and responding'
   });
 });
 
@@ -271,6 +312,12 @@ const {
   checkMidnightReset
 } = require('./Tracking/services/locationService');
 
+// Import enhanced location service
+const { enhancedLocationService } = require('./Tracking/services/enhancedLocationService');
+
+// Import bidirectional tracking service
+const { bidirectionalTrackingService } = require('./Tracking/services/bidirectionalTrackingService');
+
 // Tracking Server routes
 app.get('/tracking', (req, res) => {
   res.send('Bus Tracking Server is running');
@@ -356,6 +403,139 @@ app.post('/tracking/api/stops/:id/reset', async (req, res) => {
   }
 });
 
+// Enhanced Location Service Routes
+app.get('/tracking/api/enhanced-location/stats', (req, res) => {
+  try {
+    const stats = enhancedLocationService.getStats();
+    res.json({
+      success: true,
+      data: stats
+    });
+  } catch (error) {
+    console.error('[Tracking] Error getting enhanced location stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+app.post('/tracking/api/enhanced-location/start', (req, res) => {
+  try {
+    enhancedLocationService.start();
+    res.json({
+      success: true,
+      message: 'Enhanced location service started successfully'
+    });
+  } catch (error) {
+    console.error('[Tracking] Error starting enhanced location service:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+app.post('/tracking/api/enhanced-location/stop', (req, res) => {
+  try {
+    enhancedLocationService.stop();
+    res.json({
+      success: true,
+      message: 'Enhanced location service stopped successfully'
+    });
+  } catch (error) {
+    console.error('[Tracking] Error stopping enhanced location service:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+// Bidirectional Tracking Service Routes
+app.get('/tracking/api/bidirectional-tracking/stats', (req, res) => {
+  try {
+    const stats = bidirectionalTrackingService.getStats();
+    res.json({
+      success: true,
+      message: 'Bidirectional tracking service statistics',
+      data: stats
+    });
+  } catch (error) {
+    console.error('[Tracking] Error getting bidirectional tracking stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+app.post('/tracking/api/bidirectional-tracking/start', async (req, res) => {
+  try {
+    const result = await bidirectionalTrackingService.start();
+    res.json({
+      success: result,
+      message: result ? 'Bidirectional tracking service started successfully' : 'Failed to start service'
+    });
+  } catch (error) {
+    console.error('[Tracking] Error starting bidirectional tracking service:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+app.post('/tracking/api/bidirectional-tracking/stop', (req, res) => {
+  try {
+    bidirectionalTrackingService.stop();
+    res.json({
+      success: true,
+      message: 'Bidirectional tracking service stopped successfully'
+    });
+  } catch (error) {
+    console.error('[Tracking] Error stopping bidirectional tracking service:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+app.post('/tracking/api/bidirectional-tracking/reset-stops', async (req, res) => {
+  try {
+    await bidirectionalTrackingService.resetAllStops();
+    res.json({
+      success: true,
+      message: 'All stops reset successfully'
+    });
+  } catch (error) {
+    console.error('[Tracking] Error resetting stops:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+app.get('/tracking/api/bidirectional-tracking/ordered-stops', (req, res) => {
+  try {
+    const orderedStops = bidirectionalTrackingService.getOrderedStops();
+    res.json({
+      success: true,
+      message: 'Ordered stops retrieved successfully',
+      data: orderedStops,
+      count: orderedStops.length
+    });
+  } catch (error) {
+    console.error('[Tracking] Error getting ordered stops:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
 // ===== ADMIN BACKEND ROUTES =====
 
 // Import Admin Backend routes
@@ -387,7 +567,7 @@ app.use('/api/location', locationRoutes);
 
 // Self-ping function to keep the server alive on Render
 function startKeepAlive() {
-  const KEEP_ALIVE_INTERVAL = 14 * 60 * 1000; // 14 minutes in milliseconds
+  const KEEP_ALIVE_INTERVAL = 13 * 60 * 1000; // 13 minutes in milliseconds
   const SERVER_URL = process.env.RENDER_EXTERNAL_URL || process.env.API_BASE_URL;
   
   if (!SERVER_URL) {
@@ -395,15 +575,15 @@ function startKeepAlive() {
     return;
   }
   
-  console.log(`🔄 Keep-alive mechanism started - will ping every 14 minutes`);
-  console.log(`🎯 Target URL: ${SERVER_URL}/health`);
+  console.log(`🔄 Keep-alive mechanism started - will ping every 13 minutes`);
+  console.log(`🎯 Target URL: ${SERVER_URL}/keep-alive`);
   
   const keepAliveInterval = setInterval(async () => {
     try {
       // Use dynamic import for node-fetch if available, otherwise use a simple HTTP request
       const fetch = (await import('node-fetch')).default;
       
-      const response = await fetch(`${SERVER_URL}/health`, {
+      const response = await fetch(`${SERVER_URL}/keep-alive`, {
         method: 'GET',
         timeout: 10000 // 10 second timeout
       });
@@ -420,7 +600,7 @@ function startKeepAlive() {
         const http = require('http');
         const url = require('url');
         
-        const parsedUrl = url.parse(`${SERVER_URL}/health`);
+        const parsedUrl = url.parse(`${SERVER_URL}/keep-alive`);
         const protocol = parsedUrl.protocol === 'https:' ? https : http;
         
         const req = protocol.get(parsedUrl, (res) => {
@@ -459,6 +639,22 @@ app.listen(PORT, () => {
   console.log('Starting bus location monitoring service...');
   const intervals = startLocationMonitoring();
   
+  // Start enhanced location service
+  console.log('🚀 Starting Enhanced Location Service...');
+  enhancedLocationService.start();
+  
+  // Start bidirectional tracking service
+  console.log('🚀 Starting Bidirectional Tracking Service...');
+  bidirectionalTrackingService.start().then(started => {
+    if (started) {
+      console.log('✅ Bidirectional Tracking Service started successfully');
+    } else {
+      console.error('❌ Failed to start Bidirectional Tracking Service');
+    }
+  }).catch(error => {
+    console.error('❌ Error starting Bidirectional Tracking Service:', error);
+  });
+  
   // Start the keep-alive mechanism
   const keepAliveInterval = startKeepAlive();
   
@@ -476,6 +672,13 @@ app.listen(PORT, () => {
     if (keepAliveInterval) {
       clearInterval(keepAliveInterval);
     }
+    
+    // Stop enhanced services
+    console.log('🛑 Stopping Enhanced Location Service...');
+    enhancedLocationService.stop();
+    
+    console.log('🛑 Stopping Bidirectional Tracking Service...');
+    bidirectionalTrackingService.stop();
     
     // Close MongoDB connection if it exists
     if (mongoose.connection.readyState) {

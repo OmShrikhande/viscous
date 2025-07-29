@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bus Location Tracker</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getFirestore, collection, getDocs, doc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getDatabase, ref, set, onValue } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+        
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAc_3UzizC6Y-hzI_5fDYmXiTSTwR69oac",
+            authDomain: "bus-tracker-4e0fc.firebaseapp.com",
+            databaseURL: "https://bus-tracker-4e0fc-default-rtdb.firebaseio.com",
+            projectId: "bus-tracker-4e0fc",
+            storageBucket: "bus-tracker-4e0fc.firebasestorage.app",
+            messagingSenderId: "899399291440",
+            appId: "1:899399291440:web:1c4535401988d905e293f5",
+            measurementId: "G-JFC5HHBVGC"
+        };
+        
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const rtdb = getDatabase(app);
+        
+        // Make Firebase available globally
+        window.firebase = {
+            db,
+            rtdb,
+            collection,
+            getDocs,
+            doc,
+            updateDoc,
+            ref,
+            set,
+            onValue
+        };
+    </script>
+    
+    <style>
+        .map-container {
+            height: 400px;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        .stop-button {
+            transition: all 0.3s ease;
+        }
+        
+        .stop-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        .reached {
+            background: linear-gradient(135deg, #10b981, #059669);
+        }
+        
+        .not-reached {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+        }
+        
+        .loading {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: .5;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white min-h-screen">
+    <div class="container mx-auto px-4 py-6">
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                Bus Location Tracker
+            </h1>
+            <p class="text-gray-300">Real-time location tracking and stop management</p>
+        </header>
+        
+        <!-- Status Indicators -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 border border-gray-700">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-300">Location Status</span>
+                    <div id="location-status" class="flex items-center">
+                        <div class="w-2 h-2 bg-gray-500 rounded-full mr-2"></div>
+                        <span class="text-xs">Inactive</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 border border-gray-700">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-300">Firebase Status</span>
+                    <div id="firebase-status" class="flex items-center">
+                        <div class="w-2 h-2 bg-gray-500 rounded-full mr-2"></div>
+                        <span class="text-xs">Connecting...</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 border border-gray-700">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-300">Stops Loaded</span>
+                    <div id="stops-count" class="flex items-center">
+                        <span class="text-xs">0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Map Container -->
+        <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl p-4 mb-6 border border-gray-700">
+            <h2 class="text-xl font-semibold mb-4">Live Map</h2>
+            <div id="map" class="map-container"></div>
+        </div>
+        
+        <!-- Controls -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <!-- Location Controls -->
+            <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700">
+                <h3 class="text-lg font-semibold mb-4">Location Controls</h3>
+                
+                <!-- Auto Location -->
+                <div class="mb-4">
+                    <button id="track-location" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors">
+                        Start Auto Location Tracking
+                    </button>
+                </div>
+                
+                <!-- Manual Location Input -->
+                <div class="space-y-3">
+                    <h4 class="text-sm font-medium text-gray-300">Manual Location Input</h4>
+                    <div class="grid grid-cols-2 gap-3">
+                        <input type="number" id="manual-lat" placeholder="Latitude" step="any" 
+                               class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <input type="number" id="manual-lng" placeholder="Longitude" step="any"
+                               class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <button id="set-manual-location" class="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors">
+                        Set Manual Location
+                    </button>
+                </div>
+                
+                <!-- Current Location Display -->
+                <div class="mt-4 p-3 bg-gray-700/50 rounded-lg">
+                    <h4 class="text-sm font-medium text-gray-300 mb-2">Current Location</h4>
+                    <div class="text-sm">
+                        <div>Lat: <span id="current-lat" class="text-blue-400">--</span></div>
+                        <div>Lng: <span id="current-lng" class="text-blue-400">--</span></div>
+                        <div>Updated: <span id="last-update" class="text-gray-400">Never</span></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Bus Stops Management -->
+            <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700">
+                <h3 class="text-lg font-semibold mb-4">Bus Stops (Route2)</h3>
+                
+                <div class="mb-4">
+                    <button id="refresh-stops" class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-lg transition-colors">
+                        Refresh Stops
+                    </button>
+                </div>
+                
+                <div id="stops-container" class="space-y-2 max-h-64 overflow-y-auto">
+                    <div class="text-center text-gray-400 py-4">
+                        <div class="loading">Loading stops...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Activity Log -->
+        <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700">
+            <h3 class="text-lg font-semibold mb-4">Activity Log</h3>
+            <div id="activity-log" class="space-y-2 max-h-48 overflow-y-auto text-sm">
+                <div class="text-gray-400">System initialized</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        // Global variables
+        let map;
+        let userMarker;
+        let isTracking = false;
+        let watchId = null;
+        let busStops = [];
+        
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeMap();
+            setupEventListeners();
+            loadBusStops();
+            updateFirebaseStatus();
+        });
+        
+        // Initialize Leaflet map
+        function initializeMap() {
+            // Default location (Nagpur, India)
+            const defaultLat = 21.1458;
+            const defaultLng = 79.0882;
+            
+            map = L.map('map').setView([defaultLat, defaultLng], 13);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+            
+            logActivity('Map initialized');
+        }
+        
+        // Setup event listeners
+        function setupEventListeners() {
+            document.getElementById('track-location').addEventListener('click', toggleLocationTracking);
+            document.getElementById('set-manual-location').addEventListener('click', setManualLocation);
+            document.getElementById('refresh-stops').addEventListener('click', loadBusStops);
+        }
+        
+        // Toggle location tracking
+        function toggleLocationTracking() {
+            const button = document.getElementById('track-location');
+            
+            if (!isTracking) {
+                if (navigator.geolocation) {
+                    watchId = navigator.geolocation.watchPosition(
+                        updateLocation,
+                        handleLocationError,
+                        {
+                            enableHighAccuracy: true,
+                            timeout: 10000,
+                            maximumAge: 60000
+                        }
+                    );
+                    isTracking = true;
+                    button.textContent = 'Stop Auto Location Tracking';
+                    button.className = button.className.replace('bg-blue-600 hover:bg-blue-700', 'bg-red-600 hover:bg-red-700');
+                    updateLocationStatus('active', 'Tracking Active');
+                    logActivity('Started automatic location tracking');
+                } else {
+                    logActivity('Geolocation is not supported by this browser', 'error');
+                }
+            } else {
+                if (watchId !== null) {
+                    navigator.geolocation.clearWatch(watchId);
+                    watchId = null;
+                }
+                isTracking = false;
+                button.textContent = 'Start Auto Location Tracking';
+                button.className = button.className.replace('bg-red-600 hover:bg-red-700', 'bg-blue-600 hover:bg-blue-700');
+                updateLocationStatus('inactive', 'Inactive');
+                logActivity('Stopped automatic location tracking');
+            }
+        }
+        
+        // Update location
+        function updateLocation(position) {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            
+            updateLocationDisplay(lat, lng);
+            updateMapMarker(lat, lng);
+            sendLocationToFirebase(lat, lng);
+            
+            logActivity(`Location updated: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+        }
+        
+        // Handle location error
+        function handleLocationError(error) {
+            let message = 'Unknown location error';
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    message = 'Location access denied by user';
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    message = 'Location information unavailable';
+                    break;
+                case error.TIMEOUT:
+                    message = 'Location request timed out';
+                    break;
+            }
+            updateLocationStatus('error', 'Error');
+            logActivity(message, 'error');
+        }
+        
+        // Set manual location
+        function setManualLocation() {
+            const lat = parseFloat(document.getElementById('manual-lat').value);
+            const lng = parseFloat(document.getElementById('manual-lng').value);
+            
+            if (isNaN(lat) || isNaN(lng)) {
+                logActivity('Invalid coordinates entered', 'error');
+                return;
+            }
+            
+            if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+                logActivity('Coordinates out of valid range', 'error');
+                return;
+            }
+            
+            updateLocationDisplay(lat, lng);
+            updateMapMarker(lat, lng);
+            sendLocationToFirebase(lat, lng);
+            
+            logActivity(`Manual location set: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+        }
+        
+        // Update location display
+        function updateLocationDisplay(lat, lng) {
+            document.getElementById('current-lat').textContent = lat.toFixed(6);
+            document.getElementById('current-lng').textContent = lng.toFixed(6);
+            document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+        }
+        
+        // Update map marker
+        function updateMapMarker(lat, lng) {
+            if (userMarker) {
+                map.removeLayer(userMarker);
+            }
+            
+            userMarker = L.marker([lat, lng], {
+                icon: L.icon({
+                    iconUrl: 'https://cdn-icons-png.flaticon.com/512/3448/3448339.png',
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16],
+                    popupAnchor: [0, -16]
+                })
+            }).addTo(map);
+            
+            userMarker.bindPopup(`
+                <div class="text-center">
+                    <h3 class="font-bold">Bus Location</h3>
+                    <p>Lat: ${lat.toFixed(6)}</p>
+                    <p>Lng: ${lng.toFixed(6)}</p>
+                    <p>Updated: ${new Date().toLocaleTimeString()}</p>
+                </div>
+            `);
+            
+            map.setView([lat, lng], map.getZoom());
+        }
+        
+        // Send location to Firebase Realtime Database
+        async function sendLocationToFirebase(lat, lng) {
+            try {
+                const locationRef = window.firebase.ref(window.firebase.rtdb, 'bus/Location');
+                await window.firebase.set(locationRef, {
+                    Latitude: lat,
+                    Longitude: lng,
+                    Timestamp: new Date().toISOString()
+                });
+                logActivity('Location sent to Firebase successfully');
+            } catch (error) {
+                logActivity(`Failed to send location to Firebase: ${error.message}`, 'error');
+            }
+        }
+        
+        // Load bus stops from Firestore
+        async function loadBusStops() {
+            try {
+                const stopsContainer = document.getElementById('stops-container');
+                stopsContainer.innerHTML = '<div class="text-center text-gray-400 py-4"><div class="loading">Loading stops...</div></div>';
+                
+                const route2Collection = window.firebase.collection(window.firebase.db, 'Route2');
+                const snapshot = await window.firebase.getDocs(route2Collection);
+                
+                busStops = [];
+                snapshot.forEach((doc) => {
+                    busStops.push({
+                        id: doc.id,
+                        name: doc.id,
+                        data: doc.data()
+                    });
+                });
+                
+                renderBusStops();
+                updateStopsCount(busStops.length);
+                logActivity(`Loaded ${busStops.length} bus stops from Route2 collection`);
+                
+            } catch (error) {
+                logActivity(`Failed to load bus stops: ${error.message}`, 'error');
+                document.getElementById('stops-container').innerHTML = 
+                    '<div class="text-center text-red-400 py-4">Failed to load stops</div>';
+            }
+        }
+        
+        // Render bus stops
+        function renderBusStops() {
+            const stopsContainer = document.getElementById('stops-container');
+            
+            if (busStops.length === 0) {
+                stopsContainer.innerHTML = '<div class="text-center text-gray-400 py-4">No stops found</div>';
+                return;
+            }
+            
+            const stopsHTML = busStops.map(stop => {
+                const isReached = stop.data.reached || false;
+                return `
+                    <div class="flex items-center justify-between p-3 rounded-lg border border-gray-600 bg-gray-700/30">
+                        <div class="flex-1">
+                            <h4 class="font-medium">${stop.name}</h4>
+                            <p class="text-sm text-gray-400">Status: ${isReached ? 'Reached' : 'Not Reached'}</p>
+                        </div>
+                        <button 
+                            onclick="toggleStopStatus('${stop.id}', ${!isReached})"
+                            class="stop-button px-4 py-2 rounded-lg text-white font-medium ${isReached ? 'not-reached' : 'reached'}"
+                        >
+                            Mark as ${isReached ? 'Not Reached' : 'Reached'}
+                        </button>
+                    </div>
+                `;
+            }).join('');
+            
+            stopsContainer.innerHTML = stopsHTML;
+        }
+        
+        // Toggle stop status
+        async function toggleStopStatus(stopId, newStatus) {
+            try {
+                const stopRef = window.firebase.doc(window.firebase.db, 'Route2', stopId);
+                await window.firebase.updateDoc(stopRef, {
+                    reached: newStatus
+                });
+                
+                // Update local data
+                const stopIndex = busStops.findIndex(stop => stop.id === stopId);
+                if (stopIndex !== -1) {
+                    busStops[stopIndex].data.reached = newStatus;
+                }
+                
+                renderBusStops();
+                logActivity(`Updated ${stopId}: ${newStatus ? 'Reached' : 'Not Reached'}`);
+                
+            } catch (error) {
+                logActivity(`Failed to update stop ${stopId}: ${error.message}`, 'error');
+            }
+        }
+        
+        // Update status indicators
+        function updateLocationStatus(status, text) {
+            const statusElement = document.getElementById('location-status');
+            const dot = statusElement.querySelector('div');
+            const span = statusElement.querySelector('span');
+            
+            dot.className = `w-2 h-2 rounded-full mr-2 ${
+                status === 'active' ? 'bg-green-500' : 
+                status === 'error' ? 'bg-red-500' : 'bg-gray-500'
+            }`;
+            span.textContent = text;
+        }
+        
+        function updateFirebaseStatus() {
+            const statusElement = document.getElementById('firebase-status');
+            const dot = statusElement.querySelector('div');
+            const span = statusElement.querySelector('span');
+            
+            // Test Firebase connection
+            if (window.firebase && window.firebase.db) {
+                dot.className = 'w-2 h-2 bg-green-500 rounded-full mr-2';
+                span.textContent = 'Connected';
+                logActivity('Firebase connection established');
+            } else {
+                dot.className = 'w-2 h-2 bg-red-500 rounded-full mr-2';
+                span.textContent = 'Disconnected';
+                logActivity('Firebase connection failed', 'error');
+            }
+        }
+        
+        function updateStopsCount(count) {
+            document.getElementById('stops-count').querySelector('span').textContent = count;
+        }
+        
+        // Log activity
+        function logActivity(message, type = 'info') {
+            const logContainer = document.getElementById('activity-log');
+            const timestamp = new Date().toLocaleTimeString();
+            const colorClass = type === 'error' ? 'text-red-400' : 'text-gray-300';
+            
+            const logEntry = document.createElement('div');
+            logEntry.className = colorClass;
+            logEntry.innerHTML = `<span class="text-gray-500">[${timestamp}]</span> ${message}`;
+            
+            logContainer.insertBefore(logEntry, logContainer.firstChild);
+            
+            // Keep only last 50 entries
+            while (logContainer.children.length > 50) {
+                logContainer.removeChild(logContainer.lastChild);
+            }
+        }
+        
+        // Make toggleStopStatus available globally
+        window.toggleStopStatus = toggleStopStatus;
+        
+        // Wait for Firebase to be ready
+        setTimeout(() => {
+            updateFirebaseStatus();
+        }, 1000);
+    </script>
+</body>
+</html>

@@ -1,6 +1,7 @@
 import { useUser } from '@clerk/clerk-expo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Device from 'expo-device';
+import * as Notifications from 'expo-notifications';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { Alert } from 'react-native';
@@ -270,21 +271,24 @@ export default function BusStopNotifications({ isDark }) {
         if (!notifiedStops[notificationType]) {
           console.log(`Sending notification: ${notificationType}`);
           
-          // Send notification
-          await sendBusNotification(notificationTitle, notificationBody, notificationType);
+          // Send notification with enhanced error handling
+          const notificationSent = await sendBusNotification(notificationTitle, notificationBody, notificationType);
           
-          // Update notified stops in state
-          const updatedNotifiedStops = { ...notifiedStops, [notificationType]: true };
-          setNotifiedStops(updatedNotifiedStops);
-          
-          // Also store in AsyncStorage for persistence across app restarts
-          try {
-            await AsyncStorage.setItem('notifiedBusStops', JSON.stringify(updatedNotifiedStops));
-          } catch (error) {
-            console.error('Error saving notified stops to AsyncStorage:', error);
+          if (notificationSent) {
+            // Update notified stops in state
+            const updatedNotifiedStops = { ...notifiedStops, [notificationType]: true };
+            setNotifiedStops(updatedNotifiedStops);
+            
+            // Also store in AsyncStorage for persistence across app restarts
+            try {
+              await AsyncStorage.setItem('notifiedBusStops', JSON.stringify(updatedNotifiedStops));
+              console.log(`✅ Notification sent and recorded: ${notificationType}`);
+            } catch (error) {
+              console.error('Error saving notified stops to AsyncStorage:', error);
+            }
+          } else {
+            console.error(`❌ Failed to send notification: ${notificationType}`);
           }
-          
-          console.log(`Notification sent and recorded: ${notificationType}`);
         } else {
           console.log(`Skipping notification: ${notificationType} (already sent)`);
         }
@@ -297,6 +301,21 @@ export default function BusStopNotifications({ isDark }) {
   // Send bus notification
   const sendBusNotification = async (title, body, type) => {
     try {
+      console.log(`🔔 Attempting to send notification: ${type}`);
+      
+      // Check notification permissions first
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status !== 'granted') {
+        console.warn('⚠️ Notification permissions not granted, requesting...');
+        const { status: newStatus } = await Notifications.requestPermissionsAsync();
+        if (newStatus !== 'granted') {
+          console.error('❌ Notification permissions denied');
+          // Still show alert as fallback
+          Alert.alert(title, body);
+          return false;
+        }
+      }
+      
       // Send notification with high priority settings for background delivery
       const notificationId = await sendLocalNotification(
         title, 
@@ -307,8 +326,8 @@ export default function BusStopNotifications({ isDark }) {
             type: type,
             timestamp: new Date().toISOString() // Add timestamp for uniqueness
           },
-          // Use null trigger for immediate delivery
-          trigger: null,
+          // Use immediate trigger for better delivery
+          trigger: { seconds: 1 },
           // Set priority options for better background delivery
           priority: 'high',
           ongoing: type === 'arrived', // Make "arrived" notifications persistent
@@ -316,37 +335,43 @@ export default function BusStopNotifications({ isDark }) {
         }
       );
       
-      console.log(`Bus notification sent with ID: ${notificationId} (Type: ${type})`);
-      
-      // Store notification in AsyncStorage for persistence
-      try {
-        const existingNotifs = await AsyncStorage.getItem('sentBusNotifications');
-        const notifs = existingNotifs ? JSON.parse(existingNotifs) : [];
-        notifs.push({
-          id: notificationId,
-          type,
-          title,
-          body,
-          timestamp: new Date().toISOString()
-        });
-        // Keep only the last 10 notifications
-        if (notifs.length > 10) notifs.shift();
-        await AsyncStorage.setItem('sentBusNotifications', JSON.stringify(notifs));
-      } catch (storageError) {
-        console.error('Error storing notification in AsyncStorage:', storageError);
+      if (notificationId) {
+        console.log(`✅ Bus notification sent with ID: ${notificationId} (Type: ${type})`);
+        
+        // Store notification in AsyncStorage for persistence
+        try {
+          const existingNotifs = await AsyncStorage.getItem('sentBusNotifications');
+          const notifs = existingNotifs ? JSON.parse(existingNotifs) : [];
+          notifs.push({
+            id: notificationId,
+            type,
+            title,
+            body,
+            timestamp: new Date().toISOString()
+          });
+          // Keep only the last 10 notifications
+          if (notifs.length > 10) notifs.shift();
+          await AsyncStorage.setItem('sentBusNotifications', JSON.stringify(notifs));
+        } catch (storageError) {
+          console.error('Error storing notification in AsyncStorage:', storageError);
+        }
+        
+        // Also show an alert in emulator
+        if (isEmulator) {
+          Alert.alert(title, body);
+        }
+        
+        return true;
+      } else {
+        throw new Error('Notification ID is null');
       }
+    } catch (error) {
+      console.error('❌ Error sending notification:', error);
       
-      // Also show an alert in emulator
-      if (isEmulator) {
+      // Enhanced fallback - always show alert for critical notifications
+      if (type === 'arrived' || type === '1_stop_away') {
         Alert.alert(title, body);
       }
-      
-      return true;
-    } catch (error) {
-      console.error('Error sending notification:', error);
-      
-      // Fallback to alert
-      Alert.alert(title, body);
       
       return false;
     }
