@@ -6,8 +6,12 @@
   "scripts": {
     "start": "node server.js",
     "start:optimized": "node optimizedServer.js",
+    "start:emergency": "node emergencyServer.js",
+    "start:excel": "node excelServer.js",
     "dev": "nodemon server.js",
     "dev:optimized": "nodemon optimizedServer.js",
+    "dev:emergency": "nodemon emergencyServer.js",
+    "dev:excel": "nodemon excelServer.js",
     "setup": "node install-deps.js",
     "migrate": "node scripts/migrateToNewSerialLogic.js",
     "migrate:dry-run": "node scripts/migrateToNewSerialLogic.js --dry-run --backup",
