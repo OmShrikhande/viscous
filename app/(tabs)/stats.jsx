@@ -20,6 +20,7 @@ import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import FirebaseTestComponent from "../../components/debug/FirebaseTestComponent";
 
 export default function Stats() {
   const [locations, setLocations] = useState([]);
@@ -27,6 +28,7 @@ export default function Stats() {
   const [role, setRole] = useState(null);
   const [isDark, setIsDark] = useState(false);
   const [email, setEmail] = useState(null);
+  const [showFirebaseTest, setShowFirebaseTest] = useState(false);
 
   // 👤 Fetch user data + real-time theme updates
   useEffect(() => {
@@ -250,6 +252,20 @@ export default function Stats() {
   }
 
   // ✅ Admin view
+  if (showFirebaseTest) {
+    return (
+      <View style={styles.container}>
+        <TouchableOpacity 
+          style={[styles.clearButton, { marginBottom: 16 }]} 
+          onPress={() => setShowFirebaseTest(false)}
+        >
+          <Text style={styles.clearButtonText}>← Back to Stats</Text>
+        </TouchableOpacity>
+        <FirebaseTestComponent routeNumber="2" />
+      </View>
+    );
+  }
+  
   return (
     <>
       <FlatList
@@ -291,6 +307,14 @@ export default function Stats() {
         </TouchableOpacity>
         <TouchableOpacity style={styles.clearButton} onPress={clearStats}>
           <Text style={styles.clearButtonText}>Clear Stats</Text>
+        </TouchableOpacity>
+      </View>
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity 
+          style={[styles.pdfButton, { backgroundColor: '#007AFF' }]} 
+          onPress={() => setShowFirebaseTest(true)}
+        >
+          <Text style={styles.pdfButtonText}>🔧 Debug Firebase</Text>
         </TouchableOpacity>
       </View>
     </>

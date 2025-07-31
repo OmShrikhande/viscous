@@ -30,6 +30,7 @@ import StopInfoCard from '../../components/map/StopInfoCard';
 import StopMarkers from '../../components/map/StopMarkers';
 import ZoomControl from '../../components/map/ZoomControl';
 import { determineNearbyStops } from '../../components/map/mapUtils';
+import { debugFirebaseConnection, debugRouteData, debugRealtimeStructure } from '../../utils/firebaseDebugger';
 
 const MapScreen = () => {
   // State variables
@@ -90,10 +91,11 @@ const MapScreen = () => {
   // Set up real-time location listener
   useEffect(() => {
     console.log('Setting up real-time location listener');
-    const locationRef = ref(realtimeDatabase, '/bus/Location/');
+    const locationRef = ref(realtimeDatabase, 'bus/Location');
     
     const locationListener = onValue(locationRef, (snapshot) => {
       const data = snapshot.val();
+      console.log('Raw location data from Firebase:', data);
       if (data?.Latitude && data?.Longitude) {
         try {
           const latitude = parseFloat(data.Latitude);
@@ -154,9 +156,12 @@ const MapScreen = () => {
         }
       } else {
         console.warn('Incomplete location data received:', data);
+        console.warn('Expected structure: { Latitude: number, Longitude: number }');
       }
     }, (error) => {
       console.error('Error fetching location from Realtime Database:', error);
+      console.error('Database path attempted:', 'bus/Location');
+      console.error('Error details:', error.message);
     });
     
     // Register with our listener manager - this is a foreground-only listener
@@ -174,10 +179,23 @@ const MapScreen = () => {
     };
   }, [sortedStops, isLoading, zoom, mapReady]);
 
+  // Debug function to test Firebase connectivity
+  const runDebugChecks = async () => {
+    console.log('🔍 Running Firebase debug checks...');
+    await debugFirebaseConnection();
+    await debugRealtimeStructure();
+    if (userRouteNumber) {
+      await debugRouteData(userRouteNumber);
+    }
+  };
+
   // Load user data from AsyncStorage
   useEffect(() => {
     const fetchUserData = async () => {
       try {
+        // Run debug checks first
+        await runDebugChecks();
+        
         const userDataJson = await AsyncStorage.getItem('userData');
 
         if (!userDataJson) {
@@ -199,6 +217,9 @@ const MapScreen = () => {
         if (routeNumber) {
           console.log('Setting route number from AsyncStorage:', routeNumber);
           setUserRouteNumber(routeNumber.toString());
+          
+          // Run route-specific debug checks
+          await debugRouteData(routeNumber.toString());
         }
 
         const userDocRef = doc(firestoreDb, 'userdata', email);
@@ -315,10 +336,10 @@ const MapScreen = () => {
           const data = doc.data();
           console.log(`Processing stop: ${doc.id}`, data);
           
-          // Handle different field name formats (lowercase vs uppercase first letter)
-          const rawLat = data?.latitude || data?.Latitude;
-          const rawLng = data?.longitude || data?.Longitude;
-          const rawOrder = data?.order || data?.serialNumber || data?.SerialNumber;
+          // Handle different field name formats (match backend structure)
+          const rawLat = data?.Latitude || data?.latitude;
+          const rawLng = data?.Longitude || data?.longitude;
+          const rawOrder = data?.serialNumber || data?.order || data?.SerialNumber;
 
           console.log(`Stop ${doc.id} raw values:`, { rawLat, rawLng, rawOrder });
 

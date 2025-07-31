@@ -11,6 +11,12 @@ const {
 } = require('./services/locationService');
 const { initConnectionMonitoring } = require('./utils/connectionCheck');
 
+// Import enhanced location service
+const { enhancedLocationService } = require('./services/enhancedLocationService');
+
+// Import bidirectional tracking service
+const { bidirectionalTrackingService } = require('./services/bidirectionalTrackingService');
+
 // Initialize Express app
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -168,6 +174,124 @@ app.get('/api/midnight-reset-status', (req, res) => {
   }
 });
 
+// Enhanced Location Service Routes
+app.get('/api/enhanced-location/stats', (req, res) => {
+  try {
+    const stats = enhancedLocationService.getStats();
+    res.json({
+      message: 'Enhanced location service statistics',
+      stats: stats
+    });
+  } catch (error) {
+    console.error('Error getting enhanced location stats:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+app.post('/api/enhanced-location/start', (req, res) => {
+  try {
+    enhancedLocationService.start();
+    res.json({ message: 'Enhanced location service started successfully' });
+  } catch (error) {
+    console.error('Error starting enhanced location service:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+app.post('/api/enhanced-location/stop', (req, res) => {
+  try {
+    enhancedLocationService.stop();
+    res.json({ message: 'Enhanced location service stopped successfully' });
+  } catch (error) {
+    console.error('Error stopping enhanced location service:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+app.post('/api/enhanced-location/reset', (req, res) => {
+  try {
+    enhancedLocationService.reset();
+    res.json({ message: 'Enhanced location service reset successfully' });
+  } catch (error) {
+    console.error('Error resetting enhanced location service:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+app.post('/api/enhanced-location/force-store', async (req, res) => {
+  try {
+    const result = await enhancedLocationService.forceStore();
+    res.json({ 
+      message: result ? 'Location force stored successfully' : 'Failed to force store location',
+      success: result
+    });
+  } catch (error) {
+    console.error('Error force storing location:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Bidirectional Tracking Service Routes
+app.get('/api/bidirectional-tracking/stats', (req, res) => {
+  try {
+    const stats = bidirectionalTrackingService.getStats();
+    res.json({
+      message: 'Bidirectional tracking service statistics',
+      stats: stats
+    });
+  } catch (error) {
+    console.error('Error getting bidirectional tracking stats:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+app.post('/api/bidirectional-tracking/start', async (req, res) => {
+  try {
+    const result = await bidirectionalTrackingService.start();
+    res.json({ 
+      message: result ? 'Bidirectional tracking service started successfully' : 'Failed to start service',
+      success: result
+    });
+  } catch (error) {
+    console.error('Error starting bidirectional tracking service:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+app.post('/api/bidirectional-tracking/stop', (req, res) => {
+  try {
+    bidirectionalTrackingService.stop();
+    res.json({ message: 'Bidirectional tracking service stopped successfully' });
+  } catch (error) {
+    console.error('Error stopping bidirectional tracking service:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+app.post('/api/bidirectional-tracking/reset-stops', async (req, res) => {
+  try {
+    await bidirectionalTrackingService.resetAllStops();
+    res.json({ message: 'All stops reset successfully' });
+  } catch (error) {
+    console.error('Error resetting stops:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+app.get('/api/bidirectional-tracking/ordered-stops', (req, res) => {
+  try {
+    const orderedStops = bidirectionalTrackingService.getOrderedStops();
+    res.json({
+      message: 'Ordered stops retrieved successfully',
+      stops: orderedStops,
+      count: orderedStops.length
+    });
+  } catch (error) {
+    console.error('Error getting ordered stops:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 // Get a summary of all stops and their reached status
 app.get('/api/stops/status', async (req, res) => {
   try {
@@ -266,6 +390,19 @@ const server = app.listen(PORT, () => {
     // Start location monitoring (check every 5 seconds)
     const intervals = startLocationMonitoring(5000);
     
+    // Start enhanced location service
+    console.log('🚀 Starting Enhanced Location Service...');
+    enhancedLocationService.start();
+    
+    // Start bidirectional tracking service
+    console.log('🚀 Starting Bidirectional Tracking Service...');
+    const bidirectionalStarted = await bidirectionalTrackingService.start();
+    if (bidirectionalStarted) {
+      console.log('✅ Bidirectional Tracking Service started successfully');
+    } else {
+      console.error('❌ Failed to start Bidirectional Tracking Service');
+    }
+    
     // Perform an initial reset check after a short delay to allow systems to initialize
     setTimeout(checkInitialReset, 10000);
     
@@ -277,10 +414,18 @@ const server = app.listen(PORT, () => {
       clearInterval(intervals.monitoringInterval);
       clearInterval(intervals.midnightCheckInterval);
       
+<<<<<<< HEAD
       // Cleanup connection monitoring
       if (connectionCleanup) {
         connectionCleanup();
       }
+=======
+      // Stop enhanced location service
+      enhancedLocationService.stop();
+      
+      // Stop bidirectional tracking service
+      bidirectionalTrackingService.stop();
+>>>>>>> e0fd2b23a14b733eb50e5885557d6ec4ed459c2e
       
       server.close(() => {
         console.log('Server closed');
@@ -296,10 +441,18 @@ const server = app.listen(PORT, () => {
       clearInterval(intervals.monitoringInterval);
       clearInterval(intervals.midnightCheckInterval);
       
+<<<<<<< HEAD
       // Cleanup connection monitoring
       if (connectionCleanup) {
         connectionCleanup();
       }
+=======
+      // Stop enhanced location service
+      enhancedLocationService.stop();
+      
+      // Stop bidirectional tracking service
+      bidirectionalTrackingService.stop();
+>>>>>>> e0fd2b23a14b733eb50e5885557d6ec4ed459c2e
       
       server.close(() => {
         console.log('Server closed');

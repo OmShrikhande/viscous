@@ -157,11 +157,45 @@ const EditProfileForm = ({ visible, onClose, userData, isDark, onUpdate }) => {
         role = storedRole;
       }
       
+      // Validate user data
+      if (!user?.id) {
+        throw new Error('User ID is not available');
+      }
+      
+      if (!email) {
+        throw new Error('User email is not available');
+      }
+      
+      console.log('Creating Firestore reference for user:', email);
+      
       // Get existing data to preserve role if it exists
-      const userRef = doc(db, 'userdata', email);
-      const docSnap = await getDoc(userRef);
-      if (docSnap.exists() && docSnap.data().role) {
+      const userRef = doc(firestoreDb, 'userdata', email);
+      
+      // Try to get existing document with retry mechanism
+      let docSnap = null;
+      let getDocRetries = 0;
+      const maxGetDocRetries = 3;
+      
+      while (!docSnap && getDocRetries < maxGetDocRetries) {
+        try {
+          docSnap = await getDoc(userRef);
+          break;
+        } catch (getDocError) {
+          getDocRetries++;
+          console.warn(`⚠️ Failed to get existing document (attempt ${getDocRetries}/${maxGetDocRetries}):`, getDocError);
+          
+          if (getDocRetries < maxGetDocRetries) {
+            await new Promise(resolve => setTimeout(resolve, 1000 * getDocRetries));
+          }
+        }
+      }
+      
+      // Preserve existing role if available
+      if (docSnap?.exists() && docSnap.data().role) {
         role = docSnap.data().role;
+        console.log('✅ Preserved existing role:', role);
+      } else {
+        console.log('ℹ️ No existing role found, using default:', role);
       }
       
       // Prepare user data
@@ -176,11 +210,69 @@ const EditProfileForm = ({ visible, onClose, userData, isDark, onUpdate }) => {
         lastUpdated: serverTimestamp(),
       };
       
-      console.log('Saving to Firestore:', userData);
+      console.log('📝 Preparing to save to Firestore:', {
+        collection: 'userdata',
+        document: email,
+        data: {
+          name: userData.name,
+          email: userData.email,
+          phoneNumber: userData.phoneNumber,
+          routeNumber: userData.routeNumber,
+          busStop: userData.busStop,
+          role: userData.role
+        }
+      });
       
-      // Save to Firestore (userRef is already defined above)
-      await setDoc(userRef, userData, { merge: true });
-      console.log('✅ Firestore update successful');
+      // Save to Firestore with retry mechanism
+      let retryCount = 0;
+      const maxRetries = 3;
+      let updateSuccessful = false;
+      
+      while (retryCount < maxRetries && !updateSuccessful) {
+        try {
+          console.log(`🔄 Attempting Firestore update (attempt ${retryCount + 1}/${maxRetries})...`);
+          
+          await setDoc(userRef, userData, { merge: true });
+          
+          console.log('✅ Firestore update successful');
+          updateSuccessful = true;
+          
+        } catch (firestoreError) {
+          retryCount++;
+          console.error(`❌ Firestore update attempt ${retryCount} failed:`, {
+            error: firestoreError.message,
+            code: firestoreError.code,
+            stack: firestoreError.stack
+          });
+          
+          if (retryCount >= maxRetries) {
+            throw new Error(`Failed to update Firestore after ${maxRetries} attempts: ${firestoreError.message}`);
+          }
+          
+          // Wait before retrying (exponential backoff)
+          const waitTime = 1000 * Math.pow(2, retryCount - 1); // 1s, 2s, 4s
+          console.log(`⏳ Waiting ${waitTime}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+      }
+      
+      // Verify the update was successful
+      try {
+        const verifyDoc = await getDoc(userRef);
+        if (verifyDoc.exists()) {
+          const savedData = verifyDoc.data();
+          console.log('✅ Firestore update verified:', {
+            name: savedData.name,
+            phoneNumber: savedData.phoneNumber,
+            routeNumber: savedData.routeNumber,
+            busStop: savedData.busStop
+          });
+        } else {
+          console.warn('⚠️ Document verification failed - document does not exist');
+        }
+      } catch (verifyError) {
+        console.warn('⚠️ Could not verify Firestore update:', verifyError);
+      }
       
       // Save to AsyncStorage
       const storedData = await AsyncStorage.getItem('userData');

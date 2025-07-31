@@ -50,15 +50,33 @@ export default function RootLayout() {
       try {
         console.log('Setting up notifications in _layout.jsx...');
         
-        // First initialize without test notification
-        const notificationsInitialized = await initializeNotifications(false)
-          .catch(err => {
-            console.error('Error initializing notifications:', err);
-            return false;
-          });
+        // First initialize without test notification - with retry mechanism
+        let notificationsInitialized = false;
+        let retryCount = 0;
+        const maxRetries = 3;
+        
+        while (!notificationsInitialized && retryCount < maxRetries) {
+          try {
+            console.log(`🔄 Attempting to initialize notifications (attempt ${retryCount + 1}/${maxRetries})...`);
+            notificationsInitialized = await initializeNotifications(false);
+            
+            if (notificationsInitialized) {
+              console.log('✅ Notifications initialized successfully');
+              break;
+            }
+          } catch (err) {
+            console.error(`❌ Notification initialization attempt ${retryCount + 1} failed:`, err);
+          }
+          
+          retryCount++;
+          if (retryCount < maxRetries) {
+            console.log(`⏳ Waiting 2 seconds before retry...`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        }
         
         if (!notificationsInitialized) {
-          console.log('Notifications initialization failed, skipping background task setup');
+          console.log('⚠️ Notifications initialization failed after all retries, continuing without notifications');
           return;
         }
         
