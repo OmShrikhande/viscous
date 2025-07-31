@@ -46,11 +46,37 @@ if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && proc
   console.log("Using Firebase Admin SDK credentials from environment variables");
   
   // Create a complete service account object from environment variables
+  let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+  
+  // Handle different private key formats
+  if (privateKey) {
+    // Remove surrounding quotes if present
+    privateKey = privateKey.replace(/^["']|["']$/g, '');
+    
+    // Replace literal \n with actual newlines
+    privateKey = privateKey.replace(/\\n/g, '\n');
+    
+    // Remove any extra whitespace
+    privateKey = privateKey.trim();
+    
+    // Ensure the private key starts and ends with proper markers
+    if (!privateKey.includes('-----BEGIN PRIVATE KEY-----')) {
+      console.error('Private key does not contain proper BEGIN marker');
+    }
+    if (!privateKey.includes('-----END PRIVATE KEY-----')) {
+      console.error('Private key does not contain proper END marker');
+    }
+    
+    console.log('Private key length:', privateKey.length);
+    console.log('Private key starts with:', privateKey.substring(0, 50));
+    console.log('Private key ends with:', privateKey.substring(privateKey.length - 50));
+  }
+  
   adminServiceAccount = {
     type: process.env.FIREBASE_TYPE || 'service_account',
     project_id: process.env.FIREBASE_PROJECT_ID,
     private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID || '0849db45edf7ce912eb97332f7c9d06140652aba',
-    private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+    private_key: privateKey,
     client_email: process.env.FIREBASE_CLIENT_EMAIL,
     client_id: process.env.FIREBASE_CLIENT_ID || '103042057968763161674',
     auth_uri: process.env.FIREBASE_AUTH_URI || 'https://accounts.google.com/o/oauth2/auth',
@@ -72,11 +98,31 @@ if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && proc
 }
 
 // Initialize Firebase Admin
-admin.initializeApp({
-  credential: admin.credential.cert(adminServiceAccount)
-});
-
-const db = admin.firestore();
+let db;
+try {
+  console.log('Initializing Firebase Admin SDK...');
+  admin.initializeApp({
+    credential: admin.credential.cert(adminServiceAccount)
+  });
+  console.log('Firebase Admin SDK initialized successfully');
+  
+  db = admin.firestore();
+  console.log('Firestore database connection established');
+} catch (error) {
+  console.error('Failed to initialize Firebase Admin SDK:', error.message);
+  console.error('Full error:', error);
+  
+  // Provide specific guidance based on error type
+  if (error.message.includes('private key')) {
+    console.error('\n🔥 PRIVATE KEY ERROR DETECTED:');
+    console.error('1. Check that FIREBASE_PRIVATE_KEY in .env file is properly formatted');
+    console.error('2. Ensure the private key includes -----BEGIN PRIVATE KEY----- and -----END PRIVATE KEY-----');
+    console.error('3. Make sure \\n characters are properly escaped in the .env file');
+    console.error('4. Verify the private key is not corrupted or truncated');
+  }
+  
+  process.exit(1);
+}
 
 // Initialize Firebase Client SDK
 const firebaseConfig = {
