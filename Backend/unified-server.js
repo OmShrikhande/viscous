@@ -133,7 +133,7 @@ app.get('/health', (req, res) => {
   
   // Get service statuses
   let enhancedLocationStatus = 'unknown';
-  let bidirectionalTrackingStatus = 'unknown';
+  let optimizedTrackingStatus = 'unknown';
   
   try {
     const enhancedStats = enhancedLocationService.getStats();
@@ -143,10 +143,10 @@ app.get('/health', (req, res) => {
   }
   
   try {
-    const bidirectionalStats = bidirectionalTrackingService.getStats();
-    bidirectionalTrackingStatus = bidirectionalStats.isActive ? 'active' : 'inactive';
+    const optimizedStats = optimizedExcelTrackingService.getStats();
+    optimizedTrackingStatus = optimizedStats.isActive ? 'active' : 'inactive';
   } catch (error) {
-    bidirectionalTrackingStatus = 'error';
+    optimizedTrackingStatus = 'error';
   }
   
   res.status(200).json({
@@ -160,7 +160,7 @@ app.get('/health', (req, res) => {
       'Tracking Server': 'active', 
       'Admin Backend': 'active',
       'Enhanced Location Service': enhancedLocationStatus,
-      'Bidirectional Tracking Service': bidirectionalTrackingStatus
+      'Optimized Excel Tracking Service': optimizedTrackingStatus
     },
     endpoints: {
       esp8266: '/esp8266/upload',
@@ -315,8 +315,8 @@ const {
 // Import enhanced location service
 const { enhancedLocationService } = require('./Tracking/services/enhancedLocationService');
 
-// Import bidirectional tracking service
-const { bidirectionalTrackingService } = require('./Tracking/services/bidirectionalTrackingService');
+// Import optimized Excel tracking service (replaces bidirectional service)
+const { optimizedExcelTrackingService } = require('./Tracking/services/optimizedExcelTrackingService');
 
 // Tracking Server routes
 app.get('/tracking', (req, res) => {
@@ -347,15 +347,15 @@ app.get('/tracking/api/bus/location', async (req, res) => {
   }
 });
 
-// Get all stops
+// Get all stops (from Excel)
 app.get('/tracking/api/stops', async (req, res) => {
   try {
-    const forceRefresh = req.query.refresh === 'true';
-    const stops = await getStops(forceRefresh);
+    const stops = optimizedExcelTrackingService.getStops();
     
     res.json({
       success: true,
-      data: stops
+      data: stops,
+      message: 'Stops retrieved from Excel file'
     });
   } catch (error) {
     console.error('[Tracking] Error getting stops:', error);
@@ -369,7 +369,7 @@ app.get('/tracking/api/stops', async (req, res) => {
 // Reset all stops
 app.post('/tracking/api/stops/reset', async (req, res) => {
   try {
-    await resetStopsReached();
+    await optimizedExcelTrackingService.resetAllStops();
     
     res.json({
       success: true,
@@ -452,17 +452,17 @@ app.post('/tracking/api/enhanced-location/stop', (req, res) => {
   }
 });
 
-// Bidirectional Tracking Service Routes
-app.get('/tracking/api/bidirectional-tracking/stats', (req, res) => {
+// Optimized Excel Tracking Service Routes
+app.get('/tracking/api/optimized-tracking/stats', (req, res) => {
   try {
-    const stats = bidirectionalTrackingService.getStats();
+    const stats = optimizedExcelTrackingService.getStats();
     res.json({
       success: true,
-      message: 'Bidirectional tracking service statistics',
+      message: 'Optimized Excel tracking service statistics',
       data: stats
     });
   } catch (error) {
-    console.error('[Tracking] Error getting bidirectional tracking stats:', error);
+    console.error('[Tracking] Error getting optimized tracking stats:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -470,15 +470,15 @@ app.get('/tracking/api/bidirectional-tracking/stats', (req, res) => {
   }
 });
 
-app.post('/tracking/api/bidirectional-tracking/start', async (req, res) => {
+app.post('/tracking/api/optimized-tracking/start', async (req, res) => {
   try {
-    const result = await bidirectionalTrackingService.start();
+    const result = await optimizedExcelTrackingService.start();
     res.json({
       success: result,
-      message: result ? 'Bidirectional tracking service started successfully' : 'Failed to start service'
+      message: result ? 'Optimized Excel tracking service started successfully' : 'Failed to start service'
     });
   } catch (error) {
-    console.error('[Tracking] Error starting bidirectional tracking service:', error);
+    console.error('[Tracking] Error starting optimized tracking service:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -486,15 +486,15 @@ app.post('/tracking/api/bidirectional-tracking/start', async (req, res) => {
   }
 });
 
-app.post('/tracking/api/bidirectional-tracking/stop', (req, res) => {
+app.post('/tracking/api/optimized-tracking/stop', (req, res) => {
   try {
-    bidirectionalTrackingService.stop();
+    optimizedExcelTrackingService.stop();
     res.json({
       success: true,
-      message: 'Bidirectional tracking service stopped successfully'
+      message: 'Optimized Excel tracking service stopped successfully'
     });
   } catch (error) {
-    console.error('[Tracking] Error stopping bidirectional tracking service:', error);
+    console.error('[Tracking] Error stopping optimized tracking service:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -502,9 +502,9 @@ app.post('/tracking/api/bidirectional-tracking/stop', (req, res) => {
   }
 });
 
-app.post('/tracking/api/bidirectional-tracking/reset-stops', async (req, res) => {
+app.post('/tracking/api/optimized-tracking/reset-stops', async (req, res) => {
   try {
-    await bidirectionalTrackingService.resetAllStops();
+    await optimizedExcelTrackingService.resetAllStops();
     res.json({
       success: true,
       message: 'All stops reset successfully'
@@ -518,9 +518,9 @@ app.post('/tracking/api/bidirectional-tracking/reset-stops', async (req, res) =>
   }
 });
 
-app.get('/tracking/api/bidirectional-tracking/ordered-stops', (req, res) => {
+app.get('/tracking/api/optimized-tracking/ordered-stops', (req, res) => {
   try {
-    const orderedStops = bidirectionalTrackingService.getOrderedStops();
+    const orderedStops = optimizedExcelTrackingService.getOrderedStops();
     res.json({
       success: true,
       message: 'Ordered stops retrieved successfully',
@@ -643,16 +643,16 @@ app.listen(PORT, () => {
   console.log('🚀 Starting Enhanced Location Service...');
   enhancedLocationService.start();
   
-  // Start bidirectional tracking service
-  console.log('🚀 Starting Bidirectional Tracking Service...');
-  bidirectionalTrackingService.start().then(started => {
+  // Start optimized Excel tracking service
+  console.log('🚀 Starting Optimized Excel Tracking Service...');
+  optimizedExcelTrackingService.start().then(started => {
     if (started) {
-      console.log('✅ Bidirectional Tracking Service started successfully');
+      console.log('✅ Optimized Excel Tracking Service started successfully');
     } else {
-      console.error('❌ Failed to start Bidirectional Tracking Service');
+      console.error('❌ Failed to start Optimized Excel Tracking Service');
     }
   }).catch(error => {
-    console.error('❌ Error starting Bidirectional Tracking Service:', error);
+    console.error('❌ Error starting Optimized Excel Tracking Service:', error);
   });
   
   // Start the keep-alive mechanism
@@ -677,8 +677,8 @@ app.listen(PORT, () => {
     console.log('🛑 Stopping Enhanced Location Service...');
     enhancedLocationService.stop();
     
-    console.log('🛑 Stopping Bidirectional Tracking Service...');
-    bidirectionalTrackingService.stop();
+    console.log('🛑 Stopping Optimized Excel Tracking Service...');
+    optimizedExcelTrackingService.stop();
     
     // Close MongoDB connection if it exists
     if (mongoose.connection.readyState) {
