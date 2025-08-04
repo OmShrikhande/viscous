@@ -4,7 +4,7 @@ import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
 import { get, onValue, ref } from 'firebase/database';
 import { Platform } from 'react-native';
-import { realtimeDatabase } from '../configs/FirebaseConfigs';
+import connectionManager, { getConnectionStatus } from './firebaseConnectionManager';
 
 // Define task names
 export const BACKGROUND_NOTIFICATION_TASK = 'BACKGROUND_NOTIFICATION_TASK';
@@ -51,7 +51,14 @@ TaskManager.defineTask(BACKGROUND_BUS_LOCATION_TASK, async () => {
       return BackgroundFetch.BackgroundFetchResult.NoData;
     }
     
+    // Check connection status first
+    if (!getConnectionStatus()) {
+      console.log('Bus location tracking skipped - Firebase not connected');
+      return BackgroundFetch.BackgroundFetchResult.NoData;
+    }
+    
     // Get current bus location
+    const realtimeDatabase = connectionManager.getDatabase();
     const locationRef = ref(realtimeDatabase, 'Location');
     
     return new Promise((resolve) => {

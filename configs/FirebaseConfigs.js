@@ -1,5 +1,8 @@
-// Firebase configuration with singleton pattern to prevent duplicate initialization
+// Firebase configuration with robust connection management
 
+<<<<<<< HEAD
+import connectionManager, { firestoreDb, realtimeDatabase } from '../utils/firebaseConnectionManager';
+=======
 import { getApp, getApps, initializeApp } from "firebase/app";
 import { getDatabase } from "firebase/database";
 import { getFirestore } from "firebase/firestore";
@@ -91,6 +94,15 @@ try {
     };
   }
 }
+>>>>>>> e0fd2b23a14b733eb50e5885557d6ec4ed459c2e
 
+// Re-export the services from the connection manager
 export { firestoreDb, realtimeDatabase };
 
+// Export connection utilities
+    export { addConnectionListener, forceReconnect, getConnectionStatus } from '../utils/firebaseConnectionManager';
+
+// Export the connection manager for advanced usage
+export default connectionManager;
+
+vi

@@ -9,6 +9,7 @@ const {
   resetStopsReached,
   checkMidnightReset
 } = require('./services/locationService');
+const { initConnectionMonitoring } = require('./utils/connectionCheck');
 
 // Import enhanced location service
 const { enhancedLocationService } = require('./services/enhancedLocationService');
@@ -383,6 +384,9 @@ const server = app.listen(PORT, () => {
   console.log(`Tracking Server running on port ${PORT}`);
   
   try {
+    // Initialize Firestore connection monitoring
+    const connectionCleanup = initConnectionMonitoring();
+    
     // Start location monitoring (check every 5 seconds)
     const intervals = startLocationMonitoring(5000);
     
@@ -410,11 +414,18 @@ const server = app.listen(PORT, () => {
       clearInterval(intervals.monitoringInterval);
       clearInterval(intervals.midnightCheckInterval);
       
+<<<<<<< HEAD
+      // Cleanup connection monitoring
+      if (connectionCleanup) {
+        connectionCleanup();
+      }
+=======
       // Stop enhanced location service
       enhancedLocationService.stop();
       
       // Stop bidirectional tracking service
       bidirectionalTrackingService.stop();
+>>>>>>> e0fd2b23a14b733eb50e5885557d6ec4ed459c2e
       
       server.close(() => {
         console.log('Server closed');
@@ -430,11 +441,18 @@ const server = app.listen(PORT, () => {
       clearInterval(intervals.monitoringInterval);
       clearInterval(intervals.midnightCheckInterval);
       
+<<<<<<< HEAD
+      // Cleanup connection monitoring
+      if (connectionCleanup) {
+        connectionCleanup();
+      }
+=======
       // Stop enhanced location service
       enhancedLocationService.stop();
       
       // Stop bidirectional tracking service
       bidirectionalTrackingService.stop();
+>>>>>>> e0fd2b23a14b733eb50e5885557d6ec4ed459c2e
       
       server.close(() => {
         console.log('Server closed');

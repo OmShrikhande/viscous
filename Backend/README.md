@@ -17,11 +17,18 @@ The backend has been optimized to:
 
 The system works as follows:
 
-- **ESP8266 Server** (Port 3001): Receives location data from NodeMCU hardware and stores it in Firebase Firestore's `locationhistory` collection
-- **Tracking Server** (Port 3002): Monitors bus location from Firebase Realtime Database and checks if the bus has reached any stops, updating their status in Firestore's `Route2` collection
-- **Admin Backend** (Port 5000): Provides admin functionality and serves the frontend application
+- **ESP8266 Device**: Sends location data directly to Firebase Realtime Database at `bus/` path
+- **ESP8266 Server**: Monitors Firebase Realtime Database for new data and processes it to Firestore's `locationhistory` collection
+- **Tracking Server**: Monitors bus location from Firebase Realtime Database and checks if the bus has reached any stops, updating their status in Firestore's `Route2` collection
+- **Admin Backend**: Provides admin functionality and serves the frontend application
 
-All three servers use the same Firebase project but interact with different parts of it.
+### Data Flow
+1. **ESP8266/NodeMCU** → Firebase Realtime Database (`bus/Location` and `bus/Distance`)
+2. **Server Listener** → Monitors Realtime Database → Processes to Firestore (`locationhistory` collection)
+3. **Tracking Service** → Monitors location → Updates stop status
+4. **Admin Backend** → Provides API and frontend access
+
+All servers use the same Firebase project but interact with different parts of it.
 
 ## Setup Instructions
 
@@ -115,9 +122,39 @@ npm start
 ```
 
 This will start a unified server on port 3000 (or the port specified in your .env file) with all services available at:
-- ESP8266 Server: http://localhost:3000/esp8266
+- ESP8266 Server Status: http://localhost:3000/esp8266/status
+- ESP8266 Manual Process: http://localhost:3000/esp8266/process
 - Tracking Server: http://localhost:3000/tracking
 - Admin Backend: http://localhost:3000/api
+
+**Note**: The ESP8266 device should now write directly to Firebase Realtime Database instead of making HTTP requests to the server.
+
+### ESP8266 Device Configuration
+
+The ESP8266/NodeMCU device should be configured to write data directly to Firebase Realtime Database using the following structure:
+
+```json
+{
+  "bus": {
+    "Location": {
+      "Latitude": 23.5204,
+      "Longitude": 87.3119,
+      "Speed": 45.2,
+      "Timestamp": "2024-01-15T10:30:00Z"
+    },
+    "Distance": {
+      "DailyDistance": 125.5
+    }
+  }
+}
+```
+
+**Firebase Realtime Database URL**: `https://bus-tracker-4e0fc-default-rtdb.firebaseio.com`
+
+**Required ESP8266 Libraries**:
+- FirebaseESP8266 (for writing to Realtime Database)
+- ArduinoJson (for JSON handling)
+- ESP8266WiFi (for WiFi connectivity)
 
 For development with auto-restart on file changes:
 

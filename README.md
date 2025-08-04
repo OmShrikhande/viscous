@@ -10,6 +10,9 @@
 
 Viscous is a modern, feature-rich bus tracking application built with React Native and Expo. It provides real-time bus location tracking, notifications for bus arrivals, interactive maps, and a beautiful user interface with smooth animations.
 
+
+
+
 ### ✨ Key Features
 
 - 🗺️ **Real-time Bus Tracking** - Track buses on an interactive map

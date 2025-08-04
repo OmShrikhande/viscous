@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
 import { AppState } from 'react-native';
+import connectionManager, { addConnectionListener } from './firebaseConnectionManager';
 
 // Constants
 const LISTENER_MANAGER_TASK = 'firebase-listener-manager-task';
@@ -15,9 +16,10 @@ const activeListeners = {
   critical: new Map(),   // Listeners that must always run (use sparingly)
 };
 
-// Track app state
+// Track app state and connection
 let currentAppState = AppState.currentState;
 let isWithinActiveHours = true;
+let isFirebaseConnected = true;
 
 // Check if current time is within active hours
 const checkActiveHours = () => {
@@ -46,7 +48,7 @@ const updateActiveHoursStatus = () => {
   return isWithinActiveHours;
 };
 
-// Register a Firebase listener
+// Register a Firebase listener with connection awareness
 export const registerListener = (id, unsubscribeFunction, type = 'foreground') => {
   if (!['foreground', 'background', 'critical'].includes(type)) {
     console.warn(`Invalid listener type: ${type}. Using 'foreground' instead.`);
@@ -57,16 +59,17 @@ export const registerListener = (id, unsubscribeFunction, type = 'foreground') =
   activeListeners[type].set(id, unsubscribeFunction);
   console.log(`Registered ${type} listener: ${id}`);
   
-  // If outside active hours and not critical, immediately unsubscribe
-  if (!isWithinActiveHours && type !== 'critical') {
-    unsubscribeFunction();
-    console.log(`Immediately paused ${type} listener: ${id} (outside active hours)`);
-  }
+  // Check if we should immediately pause this listener
+  const shouldPause = 
+    (!isWithinActiveHours && type !== 'critical') ||
+    (currentAppState !== 'active' && type === 'foreground') ||
+    (!isFirebaseConnected && type !== 'critical');
   
-  // If in background and foreground-only, immediately unsubscribe
-  if (currentAppState !== 'active' && type === 'foreground') {
-    unsubscribeFunction();
-    console.log(`Immediately paused foreground listener: ${id} (app in background)`);
+  if (shouldPause) {
+    if (typeof unsubscribeFunction === 'function') {
+      unsubscribeFunction();
+      console.log(`Immediately paused ${type} listener: ${id} (inactive/disconnected)`);
+    }
   }
   
   // Return a function to unregister this listener
@@ -176,8 +179,27 @@ TaskManager.defineTask(LISTENER_MANAGER_TASK, async () => {
   }
 });
 
-// Store AppState subscription
+// Store subscriptions
 let appStateSubscription = null;
+let connectionSubscription = null;
+
+// Handle connection status changes
+const handleConnectionChange = (connected) => {
+  console.log(`🔄 Firebase connection changed: ${connected ? 'Connected' : 'Disconnected'}`);
+  
+  const wasConnected = isFirebaseConnected;
+  isFirebaseConnected = connected;
+  
+  if (!connected && wasConnected) {
+    // Connection lost - pause non-critical listeners
+    console.log('📡 Connection lost, pausing non-critical listeners');
+    pauseNonCriticalListeners();
+  } else if (connected && !wasConnected) {
+    // Connection restored - resume listeners if appropriate
+    console.log('📡 Connection restored, resuming listeners');
+    resumeListeners();
+  }
+};
 
 // Initialize the listener manager
 export const initListenerManager = async () => {
@@ -187,6 +209,9 @@ export const initListenerManager = async () => {
   
   // Register app state change listener using subscription pattern
   appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
+  
+  // Register connection status listener
+  connectionSubscription = addConnectionListener(handleConnectionChange);
   
   // Register background task
   try {
@@ -219,6 +244,13 @@ export const initListenerManager = async () => {
         appStateSubscription.remove();
         appStateSubscription = null;
         console.log('Removed AppState listener');
+      }
+      
+      // Remove connection listener
+      if (connectionSubscription) {
+        connectionSubscription();
+        connectionSubscription = null;
+        console.log('Removed connection listener');
       }
       
       // Unregister background task

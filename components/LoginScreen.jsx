@@ -182,19 +182,44 @@ export default function LoginScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       
       const oauthFlow = provider === 'google' ? startGoogle : startApple;
-      const { createdSessionId, setActive } = await oauthFlow({
+      
+      console.log(`Starting ${provider} OAuth flow...`);
+      const result = await oauthFlow({
         redirectUrl: Linking.createURL('/(tabs)/home'),
         ...(provider === 'google' && { additionalScopes: ['email', 'profile'] })
       });
 
-      if (createdSessionId) {
-        await setActive({ session: createdSessionId });
+      console.log(`${provider} OAuth result:`, result);
+
+      if (result.createdSessionId) {
+        console.log('Setting active session...');
+        await result.setActive({ session: result.createdSessionId });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        console.log('✅ OAuth login successful!');
+      } else {
+        console.log('❌ No session created from OAuth');
+        Alert.alert('Login Error', 'Authentication failed. Please try again.');
       }
     } catch (err) {
       console.error(`${provider} OAuth error:`, err);
-      if (err.message?.includes('already signed in') && user && isSignedIn) return;
-      Alert.alert('Login Error', `Failed to sign in with ${provider}. Please try again.`);
+      console.error('Error details:', JSON.stringify(err, null, 2));
+      
+      if (err.message?.includes('already signed in') && user && isSignedIn) {
+        console.log('User already signed in, ignoring error');
+        return;
+      }
+      
+      // More specific error messages
+      let errorMessage = `Failed to sign in with ${provider}. `;
+      if (err.message?.includes('oauth_not_configured')) {
+        errorMessage += 'OAuth is not properly configured. Please contact support.';
+      } else if (err.message?.includes('network')) {
+        errorMessage += 'Please check your internet connection.';
+      } else {
+        errorMessage += 'Please try again.';
+      }
+      
+      Alert.alert('Login Error', errorMessage);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setIsLoading(false);

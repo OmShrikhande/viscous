@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Dimensions, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
@@ -49,15 +49,34 @@ const NextStopsCard = ({
   
   console.log('NextStopsCard rendering with currentStopSerial:', currentStopSerial);
 
-  // Find the current stop and next stop
-  const sortedStops = [...stops].sort((a, b) => a.serialNumber - b.serialNumber);
-  console.log('Sorted stops:', sortedStops.map(s => ({ name: s.name, serial: s.serialNumber })));
-  
-  const currentStopIndex = sortedStops.findIndex(stop => stop.serialNumber === currentStopSerial);
-  console.log('Current stop index:', currentStopIndex, 'for serial:', currentStopSerial);
+  // Memoize expensive computations for performance
+  const { currentStopIndex, currentStop, nextStop, prevStop } = useMemo(() => {
+    // Stops are already sorted in parent component
+    const currentStopIndex = stops.findIndex(stop => stop.serialNumber === currentStopSerial);
+    
+    if (currentStopIndex === -1) {
+      return { currentStopIndex: -1, currentStop: null, nextStop: null, prevStop: null };
+    }
+    
+    const currentStop = stops[currentStopIndex];
+    let nextStop = null;
+    let prevStop = null;
+    
+    if (travelDirection === 'backward') {
+      // When traveling backward, the "next" stop is actually the previous one in the sequence
+      nextStop = currentStopIndex > 0 ? stops[currentStopIndex - 1] : null;
+      prevStop = currentStopIndex < stops.length - 1 ? stops[currentStopIndex + 1] : null;
+    } else {
+      // Forward direction (default)
+      nextStop = currentStopIndex < stops.length - 1 ? stops[currentStopIndex + 1] : null;
+      prevStop = currentStopIndex > 0 ? stops[currentStopIndex - 1] : null;
+    }
+    
+    return { currentStopIndex, currentStop, nextStop, prevStop };
+  }, [stops, currentStopSerial, travelDirection]);
   
   // If current stop not found, show a fallback message
-  if (currentStopIndex === -1) {
+  if (currentStopIndex === -1 || !currentStop) {
     return (
       <Animated.View 
         style={[
@@ -83,33 +102,21 @@ const NextStopsCard = ({
     );
   }
 
-  // Get current stop and determine next/previous stops based on travel direction
-  const currentStop = sortedStops[currentStopIndex];
-  let nextStop = null;
-  let prevStop = null;
-  
-  if (travelDirection === 'backward') {
-    // When traveling backward, the "next" stop is actually the previous one in the sequence
-    // and the "previous" stop is the next one in the sequence
-    nextStop = currentStopIndex > 0 ? sortedStops[currentStopIndex - 1] : null;
-    prevStop = currentStopIndex < sortedStops.length - 1 ? sortedStops[currentStopIndex + 1] : null;
-  } else {
-    // Forward direction (default)
-    nextStop = currentStopIndex < sortedStops.length - 1 ? sortedStops[currentStopIndex + 1] : null;
-    prevStop = currentStopIndex > 0 ? sortedStops[currentStopIndex - 1] : null;
-  }
+  // Theme colors (memoized for performance)
+  const colors = useMemo(() => ({
+    cardBgColor: isDark ? 'rgba(30, 30, 30, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+    textColor: isDark ? '#fff' : '#000',
+    secondaryTextColor: isDark ? '#aaa' : '#666',
+    dividerColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+  }), [isDark]);
 
-  // Theme colors
-  const cardBgColor = isDark ? 'rgba(30, 30, 30, 0.9)' : 'rgba(255, 255, 255, 0.9)';
-  const textColor = isDark ? '#fff' : '#000';
-  const secondaryTextColor = isDark ? '#aaa' : '#666';
-  const dividerColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+
 
   return (
     <Animated.View 
       style={[
         styles.container,
-        { backgroundColor: cardBgColor },
+        { backgroundColor: colors.cardBgColor },
         animStyle
       ]}
     >
@@ -119,7 +126,7 @@ const NextStopsCard = ({
           size={20} 
           color={isDark ? Colors.LIGHT : Colors.PRIMARY} 
         />
-        <Text style={[styles.headerText, { color: textColor }]}>
+        <Text style={[styles.headerText, { color: colors.textColor }]}>
           Bus Stops
         </Text>
       </View>
