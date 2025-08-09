@@ -1,6 +1,5 @@
-import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Marker, Callout } from 'react-native-maps';
+import { Callout, Marker } from 'react-native-maps';
 import { getMarkerColor } from './MapStyles';
 
 /**
@@ -22,14 +21,16 @@ const StopMarkers = ({ stops, onMarkerPress }) => {
           key={`stop-${stop.name}-${idx}`}
           coordinate={{ latitude: stop.latitude, longitude: stop.longitude }}
           pinColor={getMarkerColor(stop)}
-          title={stop.name}
+          title={`${stop.serialNumber || idx + 1}. ${stop.name}`}
           onPress={() => onMarkerPress(stop)}
         >
           <Callout>
             <View style={styles.calloutContainer}>
-              <Text style={styles.calloutTitle}>{stop.name}</Text>
+              <Text style={styles.calloutTitle}>
+                {stop.serialNumber || idx + 1}. {stop.name}
+              </Text>
               <Text style={styles.calloutDetail}>
-                Serial: {stop.serialNumber}
+                Serial: {stop.serialNumber || idx + 1}
               </Text>
               <Text style={styles.calloutDetail}>
                 Status: {stop.reached ? 'Reached' : 'Not Reached'}

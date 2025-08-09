@@ -406,7 +406,7 @@
             }
         }
         
-        // Render bus stops
+        // Render bus stops - Dynamic format with maintained order
         function renderBusStops() {
             const stopsContainer = document.getElementById('stops-container');
             
@@ -415,19 +415,56 @@
                 return;
             }
             
-            const stopsHTML = busStops.map(stop => {
+            // Sort stops by their original order (serialNumber or order field) to maintain sequence
+            const sortedStops = [...busStops].sort((a, b) => {
+                const orderA = a.data.serialNumber || a.data.order || 0;
+                const orderB = b.data.serialNumber || b.data.order || 0;
+                return orderA - orderB;
+            });
+            
+            const stopsHTML = sortedStops.map((stop, index) => {
                 const isReached = stop.data.reached || false;
+                const reachedTime = stop.data.reachedTime || '';
+                const stopNumber = index + 1; // Sequential numbering
+                
                 return `
-                    <div class="flex items-center justify-between p-3 rounded-lg border border-gray-600 bg-gray-700/30">
-                        <div class="flex-1">
-                            <h4 class="font-medium">${stop.name}</h4>
-                            <p class="text-sm text-gray-400">Status: ${isReached ? 'Reached' : 'Not Reached'}</p>
+                    <div class="flex items-center justify-between p-3 rounded-lg border transition-all duration-300 ${
+                        isReached 
+                            ? 'border-green-500 bg-green-900/20' 
+                            : 'border-gray-600 bg-gray-700/30'
+                    }">
+                        <div class="flex items-center flex-1">
+                            <!-- Stop Number -->
+                            <div class="flex items-center justify-center w-8 h-8 rounded-full mr-3 text-sm font-bold ${
+                                isReached 
+                                    ? 'bg-green-500 text-white' 
+                                    : 'bg-gray-600 text-gray-300'
+                            }">
+                                ${isReached ? '✓' : stopNumber}
+                            </div>
+                            
+                            <!-- Stop Info -->
+                            <div class="flex-1">
+                                <h4 class="font-medium ${isReached ? 'text-green-400' : 'text-white'}">${stop.name}</h4>
+                                <p class="text-sm ${isReached ? 'text-green-300' : 'text-gray-400'}">
+                                    ${isReached 
+                                        ? `✅ Reached ${reachedTime ? 'at ' + reachedTime : ''}` 
+                                        : '⏳ Not Reached'
+                                    }
+                                </p>
+                            </div>
                         </div>
+                        
+                        <!-- Action Button -->
                         <button 
                             onclick="toggleStopStatus('${stop.id}', ${!isReached})"
-                            class="stop-button px-4 py-2 rounded-lg text-white font-medium ${isReached ? 'not-reached' : 'reached'}"
+                            class="stop-button px-4 py-2 rounded-lg text-white font-medium transition-all duration-300 ${
+                                isReached 
+                                    ? 'bg-red-600 hover:bg-red-700' 
+                                    : 'bg-green-600 hover:bg-green-700'
+                            }"
                         >
-                            Mark as ${isReached ? 'Not Reached' : 'Reached'}
+                            ${isReached ? 'Mark Not Reached' : 'Mark Reached'}
                         </button>
                     </div>
                 `;
@@ -439,19 +476,33 @@
         // Toggle stop status
         async function toggleStopStatus(stopId, newStatus) {
             try {
-                const stopRef = window.firebase.doc(window.firebase.db, 'Route2', stopId);
-                await window.firebase.updateDoc(stopRef, {
+                const updateData = {
                     reached: newStatus
-                });
+                };
+                
+                // Add timestamp when marking as reached
+                if (newStatus) {
+                    updateData.reachedTime = new Date().toLocaleTimeString([], { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    });
+                } else {
+                    // Remove timestamp when marking as not reached
+                    updateData.reachedTime = null;
+                }
+                
+                const stopRef = window.firebase.doc(window.firebase.db, 'Route2', stopId);
+                await window.firebase.updateDoc(stopRef, updateData);
                 
                 // Update local data
                 const stopIndex = busStops.findIndex(stop => stop.id === stopId);
                 if (stopIndex !== -1) {
                     busStops[stopIndex].data.reached = newStatus;
+                    busStops[stopIndex].data.reachedTime = updateData.reachedTime;
                 }
                 
                 renderBusStops();
-                logActivity(`Updated ${stopId}: ${newStatus ? 'Reached' : 'Not Reached'}`);
+                logActivity(`Updated ${stopId}: ${newStatus ? 'Reached' : 'Not Reached'}${newStatus ? ' at ' + updateData.reachedTime : ''}`);
                 
             } catch (error) {
                 logActivity(`Failed to update stop ${stopId}: ${error.message}`, 'error');
