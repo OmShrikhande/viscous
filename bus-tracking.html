@@ -174,7 +174,14 @@
             
             <!-- Bus Stops Management -->
             <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700">
-                <h3 class="text-lg font-semibold mb-4">Bus Stops (Route2)</h3>
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold">Bus Stops (Route2)</h3>
+                    <div class="text-sm text-gray-400">
+                        <span class="inline-flex items-center">
+                            📊 Sorted by Serial Number
+                        </span>
+                    </div>
+                </div>
                 
                 <div class="mb-4">
                     <button id="refresh-stops" class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-lg transition-colors">
@@ -406,7 +413,7 @@
             }
         }
         
-        // Render bus stops - Dynamic format with maintained order
+        // Render bus stops - Sorted by serial number from Excel data
         function renderBusStops() {
             const stopsContainer = document.getElementById('stops-container');
             
@@ -415,17 +422,34 @@
                 return;
             }
             
-            // Sort stops by their original order (serialNumber or order field) to maintain sequence
+            // Sort stops by serialNumber (from Excel data) to maintain proper route order
             const sortedStops = [...busStops].sort((a, b) => {
-                const orderA = a.data.serialNumber || a.data.order || 0;
-                const orderB = b.data.serialNumber || b.data.order || 0;
-                return orderA - orderB;
+                const serialA = a.data.serialNumber;
+                const serialB = b.data.serialNumber;
+                
+                // Handle missing serial numbers - put them at the end
+                if (serialA === undefined || serialA === null) return 1;
+                if (serialB === undefined || serialB === null) return -1;
+                
+                // Primary sort by serial number
+                const serialDiff = serialA - serialB;
+                if (serialDiff !== 0) return serialDiff;
+                
+                // Secondary sort by stop name for same serial numbers
+                return a.name.localeCompare(b.name);
             });
+            
+            // Debug logging to verify sorting
+            console.log('Sorted stops by serialNumber:', sortedStops.map(s => ({
+                name: s.name,
+                serialNumber: s.data.serialNumber,
+                reached: s.data.reached
+            })));
             
             const stopsHTML = sortedStops.map((stop, index) => {
                 const isReached = stop.data.reached || false;
                 const reachedTime = stop.data.reachedTime || '';
-                const stopNumber = index + 1; // Sequential numbering
+                const serialNumber = stop.data.serialNumber || (index + 1);
                 
                 return `
                     <div class="flex items-center justify-between p-3 rounded-lg border transition-all duration-300 ${
@@ -434,18 +458,21 @@
                             : 'border-gray-600 bg-gray-700/30'
                     }">
                         <div class="flex items-center flex-1">
-                            <!-- Stop Number -->
+                            <!-- Serial Number from Excel -->
                             <div class="flex items-center justify-center w-8 h-8 rounded-full mr-3 text-sm font-bold ${
                                 isReached 
                                     ? 'bg-green-500 text-white' 
                                     : 'bg-gray-600 text-gray-300'
                             }">
-                                ${isReached ? '✓' : stopNumber}
+                                ${isReached ? '✓' : serialNumber}
                             </div>
                             
                             <!-- Stop Info -->
                             <div class="flex-1">
-                                <h4 class="font-medium ${isReached ? 'text-green-400' : 'text-white'}">${stop.name}</h4>
+                                <h4 class="font-medium ${isReached ? 'text-green-400' : 'text-white'}">
+                                    ${stop.name}
+                                    <span class="text-xs text-gray-500 ml-2">(#${serialNumber})</span>
+                                </h4>
                                 <p class="text-sm ${isReached ? 'text-green-300' : 'text-gray-400'}">
                                     ${isReached 
                                         ? `✅ Reached ${reachedTime ? 'at ' + reachedTime : ''}` 
@@ -540,7 +567,13 @@
         }
         
         function updateStopsCount(count) {
-            document.getElementById('stops-count').querySelector('span').textContent = count;
+            const countElement = document.getElementById('stops-count').querySelector('span');
+            countElement.textContent = `${count} (Serial Order)`;
+            
+            // Add a small indicator that stops are sorted by serial number
+            if (count > 0) {
+                logActivity(`Loaded ${count} stops sorted by serial number from Excel data`);
+            }
         }
         
         // Log activity
