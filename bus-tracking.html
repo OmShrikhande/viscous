@@ -450,7 +450,6 @@
                 const isReached = stop.data.reached || false;
                 const reachedTime = stop.data.reachedTime || '';
                 const serialNumber = stop.data.serialNumber || (index + 1);
-                
                 return `
                     <div class="flex items-center justify-between p-3 rounded-lg border transition-all duration-300 ${
                         isReached 
@@ -466,7 +465,6 @@
                             }">
                                 ${isReached ? '✓' : serialNumber}
                             </div>
-                            
                             <!-- Stop Info -->
                             <div class="flex-1">
                                 <h4 class="font-medium ${isReached ? 'text-green-400' : 'text-white'}">
@@ -479,9 +477,13 @@
                                         : '⏳ Not Reached'
                                     }
                                 </p>
+                                <!-- Serial Number Edit UI -->
+                                <div class="mt-2 flex items-center space-x-2">
+                                    <input type="number" min="1" value="${serialNumber}" id="serial-input-${stop.id}" class="w-16 px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none" />
+                                    <button onclick="changeSerialNumber('${stop.id}')" class="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs">Set Serial</button>
+                                </div>
                             </div>
                         </div>
-                        
                         <!-- Action Button -->
                         <button 
                             onclick="toggleStopStatus('${stop.id}', ${!isReached})"
@@ -496,7 +498,6 @@
                     </div>
                 `;
             }).join('');
-            
             stopsContainer.innerHTML = stopsHTML;
         }
         
@@ -596,6 +597,29 @@
         
         // Make toggleStopStatus available globally
         window.toggleStopStatus = toggleStopStatus;
+        // Add changeSerialNumber to window
+        window.changeSerialNumber = async function(stopId) {
+            try {
+                const input = document.getElementById(`serial-input-${stopId}`);
+                if (!input) return;
+                const newSerial = parseInt(input.value, 10);
+                if (isNaN(newSerial) || newSerial < 1) {
+                    logActivity('Invalid serial number entered', 'error');
+                    return;
+                }
+                const stopRef = window.firebase.doc(window.firebase.db, 'Route2', stopId);
+                await window.firebase.updateDoc(stopRef, { serialNumber: newSerial });
+                // Update local data
+                const stopIndex = busStops.findIndex(stop => stop.id === stopId);
+                if (stopIndex !== -1) {
+                    busStops[stopIndex].data.serialNumber = newSerial;
+                }
+                renderBusStops();
+                logActivity(`Serial number for ${stopId} updated to ${newSerial}`);
+            } catch (error) {
+                logActivity(`Failed to update serial number for ${stopId}: ${error.message}`, 'error');
+            }
+        };
         
         // Wait for Firebase to be ready
         setTimeout(() => {
