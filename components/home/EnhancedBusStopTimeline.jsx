@@ -12,27 +12,26 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Dimensions,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  RefreshControl
+    ActivityIndicator,
+    Dimensions,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
-import Animated, { 
-  FadeInDown, 
-  FadeOutUp, 
-  Layout,
-  SlideInRight,
-  SlideOutLeft,
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming
+import Animated, {
+    FadeInDown,
+    FadeOutUp,
+    Layout,
+    SlideInRight,
+    SlideOutLeft,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring
 } from 'react-native-reanimated';
 import { firestoreDb } from '../../configs/FirebaseConfigs';
 
@@ -77,52 +76,31 @@ const EnhancedBusStopTimeline = ({ isDark, refreshing: externalRefreshing }) => 
   }, []);
   
   /**
-   * Process and order stops based on reach status and timestamps
+   * Process and order stops based on original Excel serial number order
+   * Maintains fixed positions while only changing visual appearance for reached stops
    */
   const processStopsOrdering = useCallback((stopsData) => {
-    console.log('🔄 Processing stops ordering...');
+    console.log('🔄 Processing stops ordering (maintaining Excel serial number order)...');
     
-    // Separate reached and unreached stops
-    const reachedStops = stopsData.filter(stop => stop.reached);
-    const unreachedStops = stopsData.filter(stop => !stop.reached);
-    
-    // Sort reached stops by most recent first (using lastReachedTimestamp or reachedAt)
-    reachedStops.sort((a, b) => {
-      const aTime = a.lastReachedTimestamp || (a.reachedAt?.toMillis ? a.reachedAt.toMillis() : 0);
-      const bTime = b.lastReachedTimestamp || (b.reachedAt?.toMillis ? b.reachedAt.toMillis() : 0);
-      return bTime - aTime; // Most recent first
-    });
-    
-    // Sort unreached stops by serial number or alphabetically
-    unreachedStops.sort((a, b) => {
+    // Sort ALL stops by their original serial number from Excel (maintain fixed order)
+    const orderedList = stopsData.sort((a, b) => {
       const aSerial = a.serialNumber || 999;
       const bSerial = b.serialNumber || 999;
       if (aSerial !== bSerial) return aSerial - bSerial;
       return a.id.localeCompare(b.id);
-    });
+    }).map(stop => ({
+      ...stop,
+      // Keep the original serial number as display serial number
+      displaySerialNumber: stop.serialNumber || 0,
+      // Mark recently reached stops for visual styling
+      isRecentlyReached: stop.reached && stop.reachedAt && 
+        (Date.now() - (stop.reachedAt?.toMillis ? stop.reachedAt.toMillis() : 0)) < 300000 // 5 minutes
+    }));
     
-    // Assign display serial numbers
-    const orderedList = [];
+    const reachedCount = orderedList.filter(stop => stop.reached).length;
+    const unreachedCount = orderedList.length - reachedCount;
     
-    // Add reached stops with serial numbers 1, 2, 3...
-    reachedStops.forEach((stop, index) => {
-      orderedList.push({
-        ...stop,
-        displaySerialNumber: index + 1,
-        isRecentlyReached: true
-      });
-    });
-    
-    // Add unreached stops with continuing serial numbers
-    unreachedStops.forEach((stop, index) => {
-      orderedList.push({
-        ...stop,
-        displaySerialNumber: reachedStops.length + index + 1,
-        isRecentlyReached: false
-      });
-    });
-    
-    console.log(`✅ Stops ordered: ${reachedStops.length} reached, ${unreachedStops.length} unreached`);
+    console.log(`✅ Stops ordered by Excel serial number: ${reachedCount} reached, ${unreachedCount} unreached (positions fixed)`);
     return orderedList;
   }, []);
   

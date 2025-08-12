@@ -4,13 +4,13 @@ import { onValue, ref } from 'firebase/database';
 import { collection, getDocs, onSnapshot } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Dimensions,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Dimensions,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { firestoreDb, realtimeDatabase } from '../../configs/FirebaseConfigs';
@@ -509,18 +509,23 @@ const BusStopTimeline = ({ isDark, refreshing }) => {
                     isUserStop && styles.userStopCard,
                     isNext && styles.nextStopCard,
                   ]}>
-                    <Text 
-                      style={[
-                        styles.stopName, 
-                        { color: textColor },
-                        isUserStop && styles.userStopText,
-                        isCurrentStop && styles.currentStopText
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {stop.name}
-                      {isUserStop && " (Your Stop)"}
-                    </Text>
+                    <View style={styles.stopNameContainer}>
+                      <Text style={[styles.serialNumber, { color: isDark ? '#888' : '#666' }]}>
+                        {stop.data.serialNumber || index + 1}.
+                      </Text>
+                      <Text 
+                        style={[
+                          styles.stopName, 
+                          { color: textColor },
+                          isUserStop && styles.userStopText,
+                          isCurrentStop && styles.currentStopText
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {stop.name}
+                        {isUserStop && " (Your Stop)"}
+                      </Text>
+                    </View>
                     
                     {reachedStops[stop.name]?.reached && (
                       <Text style={[styles.timeText, { color: isDark ? '#aaa' : '#666' }]}>
@@ -579,18 +584,23 @@ const BusStopTimeline = ({ isDark, refreshing }) => {
                     isUserStop && styles.userStopCard,
                     isNext && styles.nextStopCard,
                   ]}>
-                    <Text 
-                      style={[
-                        styles.stopName, 
-                        { color: textColor },
-                        isUserStop && styles.userStopText,
-                        isCurrentStop && styles.currentStopText
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {stop.name}
-                      {isUserStop && " (Your Stop)"}
-                    </Text>
+                    <View style={styles.stopNameContainer}>
+                      <Text style={[styles.serialNumber, { color: isDark ? '#888' : '#666' }]}>
+                        {stop.data.serialNumber || index + 1}.
+                      </Text>
+                      <Text 
+                        style={[
+                          styles.stopName, 
+                          { color: textColor },
+                          isUserStop && styles.userStopText,
+                          isCurrentStop && styles.currentStopText
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {stop.name}
+                        {isUserStop && " (Your Stop)"}
+                      </Text>
+                    </View>
                     
                     {reachedStops[stop.name]?.reached && (
                       <Text style={[styles.timeText, { color: isDark ? '#aaa' : '#666' }]}>
@@ -808,11 +818,24 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: '#FF9800',
   },
+  // Stop name container
+  stopNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 6,
+  },
+  // Serial number text
+  serialNumber: {
+    fontSize: 14,
+    fontFamily: 'flux-bold',
+    marginRight: 8,
+    minWidth: 25,
+  },
   // Stop name text
   stopName: {
     fontSize: 15,
     fontFamily: 'flux-bold',
-    marginBottom: 6,
+    flex: 1,
   },
   // User stop text
   userStopText: {
