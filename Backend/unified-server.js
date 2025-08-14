@@ -1,3 +1,103 @@
+// ===== AUTO SERIAL ROTATION ON REACH LOGIC =====
+/**
+ * When any stop is marked as reached, check if it has the highest serial number.
+ * If so, rotate serial numbers: reached stop gets 1, previous gets 2, etc.
+ *
+ * Call this function after a stop is marked as reached.
+ */
+async function autoRotateSerialsIfNeeded(reachedStopId) {
+  try {
+    // Get all stops from Firestore
+    const stopsSnapshot = await firestoreDb.collection('Route2').get();
+    const stops = [];
+    stopsSnapshot.forEach(doc => {
+      const data = doc.data();
+      stops.push({
+        id: doc.id,
+        serialNumber: data.serialNumber || 0
+      });
+    });
+    if (stops.length === 0) return;
+    // Find the stop with the highest serial number
+    const maxSerial = Math.max(...stops.map(s => s.serialNumber));
+    const reachedStop = stops.find(s => s.id === reachedStopId);
+    if (!reachedStop) return;
+    if (reachedStop.serialNumber !== maxSerial) return; // Only rotate if this is the highest serial
+    // Sort stops by serialNumber descending (so highest is first)
+    const sorted = stops.sort((a, b) => b.serialNumber - a.serialNumber);
+    // Assign new serials: reached stop gets 1, previous gets 2, etc.
+    const updates = [];
+    for (let i = 0; i < sorted.length; i++) {
+      const newSerial = i + 1;
+      updates.push({ id: sorted[i].id, newSerial });
+    }
+    // Batch update
+    const batch = firestoreDb.batch();
+    updates.forEach(u => {
+      const ref = firestoreDb.collection('Route2').doc(u.id);
+      batch.update(ref, { serialNumber: u.newSerial });
+    });
+    await batch.commit();
+    console.log('[Auto Serial Rotation] Serial numbers rotated successfully');
+  } catch (error) {
+    console.error('[Auto Serial Rotation] Error:', error);
+  }
+}
+// ===== SERIAL NUMBER ROTATION LOGIC =====
+/**
+ * Rotates serial numbers so that the reached stop (with highest serial) becomes 1,
+ * the previous becomes 2, and so on, wrapping around for all stops.
+ * POST /tracking/api/rotate-serials/:stopId
+ * Body: { }
+ *
+ * Example: If stopId is the stop with the highest serial, it becomes 1, previous becomes 2, etc.
+ */
+app.post('/tracking/api/rotate-serials/:stopId', async (req, res) => {
+  try {
+    const stopId = req.params.stopId;
+    // Get all stops from Firestore
+    const stopsSnapshot = await firestoreDb.collection('Route2').get();
+    const stops = [];
+    stopsSnapshot.forEach(doc => {
+      const data = doc.data();
+      stops.push({
+        id: doc.id,
+        serialNumber: data.serialNumber || 0
+      });
+    });
+    if (stops.length === 0) {
+      return res.status(404).json({ success: false, message: 'No stops found' });
+    }
+    // Find the stop with the highest serial number
+    const maxSerial = Math.max(...stops.map(s => s.serialNumber));
+    const reachedStop = stops.find(s => s.id === stopId);
+    if (!reachedStop) {
+      return res.status(404).json({ success: false, message: 'Stop not found' });
+    }
+    if (reachedStop.serialNumber !== maxSerial) {
+      return res.status(400).json({ success: false, message: 'Stop is not the highest serial number' });
+    }
+    // Sort stops by serialNumber descending (so highest is first)
+    const sorted = stops.sort((a, b) => b.serialNumber - a.serialNumber);
+    // Assign new serials: reached stop gets 1, previous gets 2, etc.
+    const updates = [];
+    for (let i = 0; i < sorted.length; i++) {
+      const newSerial = i + 1;
+      updates.push({ id: sorted[i].id, newSerial });
+    }
+    // Batch update
+    const batch = firestoreDb.batch();
+    updates.forEach(u => {
+      const ref = firestoreDb.collection('Route2').doc(u.id);
+      batch.update(ref, { serialNumber: u.newSerial });
+    });
+    await batch.commit();
+    res.json({ success: true, message: 'Serial numbers rotated successfully', updates });
+  } catch (error) {
+    console.error('[Serial Rotation] Error:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+});
 /**
  * OPTIMIZED Unified Server for Bus Tracking System - QUOTA FIX
  * 
@@ -306,6 +406,30 @@ app.post("/esp8266/upload", async (req, res) => {
 });
 
 // ===== TRACKING SERVER ROUTES (EXCEL OPTIMIZED) =====
+
+// --- PATCH: Add endpoint to mark stop as reached and auto-rotate serials if needed ---
+/**
+ * POST /tracking/api/mark-reached/:stopId
+ * Marks a stop as reached and, if it has the highest serial, rotates serials.
+ * Body: { }
+ */
+app.post('/tracking/api/mark-reached/:stopId', async (req, res) => {
+  try {
+    const stopId = req.params.stopId;
+    const stopRef = firestoreDb.collection('Route2').doc(stopId);
+    const stopDoc = await stopRef.get();
+    if (!stopDoc.exists) {
+      return res.status(404).json({ success: false, message: 'Stop not found' });
+    }
+    await stopRef.update({ reached: true });
+    // Call auto-rotation logic
+    await autoRotateSerialsIfNeeded(stopId);
+    res.json({ success: true, message: 'Stop marked as reached. Serial numbers rotated if needed.' });
+  } catch (error) {
+    console.error('[Mark Reached] Error:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+});
 
 // Tracking Server routes (using Excel service)
 app.get('/tracking', (req, res) => {
