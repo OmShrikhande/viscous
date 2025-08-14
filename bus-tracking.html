@@ -528,15 +528,18 @@
                 // If marking as reached, send this stop's lat/lng to Realtime DB
                 if (newStatus) {
                     const stop = busStops.find(stop => stop.id === stopId);
-                    if (stop && stop.data && stop.data.latitude != null && stop.data.longitude != null) {
+                    // Use capitalized property names to match Firestore: Latitude, Longitude
+                    const lat = stop && stop.data ? stop.data.Latitude : null;
+                    const lng = stop && stop.data ? stop.data.Longitude : null;
+                    if (lat != null && lng != null) {
                         try {
                             const locationRef = window.firebase.ref(window.firebase.rtdb, 'bus/Location');
                             await window.firebase.set(locationRef, {
-                                Latitude: stop.data.latitude,
-                                Longitude: stop.data.longitude,
+                                Latitude: lat,
+                                Longitude: lng,
                                 Timestamp: new Date().toISOString()
                             });
-                            logActivity(`Sent location of ${stopId} to Firebase: ${stop.data.latitude}, ${stop.data.longitude}`);
+                            logActivity(`Sent location of ${stopId} to Firebase: ${lat}, ${lng}`);
                         } catch (err) {
                             logActivity(`Failed to send stop location to Firebase: ${err.message}`, 'error');
                         }
