@@ -19,15 +19,15 @@
         
         // Firebase configuration
         const firebaseConfig = {
-            apiKey: "AIzaSyAc_3UzizC6Y-hzI_5fDYmXiTSTwR69oac",
-            authDomain: "bus-tracker-4e0fc.firebaseapp.com",
-            databaseURL: "https://bus-tracker-4e0fc-default-rtdb.firebaseio.com",
-            projectId: "bus-tracker-4e0fc",
-            storageBucket: "bus-tracker-4e0fc.firebasestorage.app",
-            messagingSenderId: "899399291440",
-            appId: "1:899399291440:web:1c4535401988d905e293f5",
-            measurementId: "G-JFC5HHBVGC"
-        };
+  apiKey: "AIzaSyAc_3UzizC6Y-hzI_5fDYmXiTSTwR69oac",
+  authDomain: "bus-tracker-4e0fc.firebaseapp.com",
+  databaseURL: "https://bus-tracker-4e0fc-default-rtdb.firebaseio.com",
+  projectId: "bus-tracker-4e0fc",
+  storageBucket: "bus-tracker-4e0fc.firebasestorage.app",
+  messagingSenderId: "899399291440",
+  appId: "1:899399291440:web:1c4535401988d905e293f5",
+  measurementId: "G-JFC5HHBVGC"
+};
         
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
@@ -507,7 +507,6 @@
                 const updateData = {
                     reached: newStatus
                 };
-                
                 // Add timestamp when marking as reached
                 if (newStatus) {
                     updateData.reachedTime = new Date().toLocaleTimeString([], { 
@@ -518,20 +517,35 @@
                     // Remove timestamp when marking as not reached
                     updateData.reachedTime = null;
                 }
-                
                 const stopRef = window.firebase.doc(window.firebase.db, 'Route2', stopId);
                 await window.firebase.updateDoc(stopRef, updateData);
-                
                 // Update local data
                 const stopIndex = busStops.findIndex(stop => stop.id === stopId);
                 if (stopIndex !== -1) {
                     busStops[stopIndex].data.reached = newStatus;
                     busStops[stopIndex].data.reachedTime = updateData.reachedTime;
                 }
-                
+                // If marking as reached, send this stop's lat/lng to Realtime DB
+                if (newStatus) {
+                    const stop = busStops.find(stop => stop.id === stopId);
+                    if (stop && stop.data && stop.data.latitude != null && stop.data.longitude != null) {
+                        try {
+                            const locationRef = window.firebase.ref(window.firebase.rtdb, 'bus/Location');
+                            await window.firebase.set(locationRef, {
+                                Latitude: stop.data.latitude,
+                                Longitude: stop.data.longitude,
+                                Timestamp: new Date().toISOString()
+                            });
+                            logActivity(`Sent location of ${stopId} to Firebase: ${stop.data.latitude}, ${stop.data.longitude}`);
+                        } catch (err) {
+                            logActivity(`Failed to send stop location to Firebase: ${err.message}`, 'error');
+                        }
+                    } else {
+                        logActivity(`Stop ${stopId} does not have latitude/longitude data`, 'error');
+                    }
+                }
                 renderBusStops();
                 logActivity(`Updated ${stopId}: ${newStatus ? 'Reached' : 'Not Reached'}${newStatus ? ' at ' + updateData.reachedTime : ''}`);
-                
             } catch (error) {
                 logActivity(`Failed to update stop ${stopId}: ${error.message}`, 'error');
             }
