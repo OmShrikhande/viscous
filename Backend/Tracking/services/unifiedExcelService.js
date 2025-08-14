@@ -246,8 +246,20 @@ class UnifiedExcelService {
     
     Object.assign(this.busLocation, locationUpdate);
     
-    if (this.busLocation.latitude && this.busLocation.longitude) {
-      console.log(`🚌 Bus location updated: (${this.busLocation.latitude}, ${this.busLocation.longitude})`);
+    // Log partial updates for debugging
+    if (locationUpdate.latitude !== undefined) {
+      console.log(`📍 Bus latitude updated: ${locationUpdate.latitude}`);
+    }
+    if (locationUpdate.longitude !== undefined) {
+      console.log(`📍 Bus longitude updated: ${locationUpdate.longitude}`);
+    }
+    
+    // Only log complete location when both coordinates are valid numbers
+    if (typeof this.busLocation.latitude === 'number' && 
+        typeof this.busLocation.longitude === 'number') {
+      console.log(`🚌 Bus location complete: (${this.busLocation.latitude}, ${this.busLocation.longitude})`);
+    } else {
+      console.log(`⚠️ Bus location incomplete: lat=${this.busLocation.latitude}, lng=${this.busLocation.longitude}`);
     }
   }
   
@@ -299,6 +311,13 @@ class UnifiedExcelService {
         return;
       }
       
+      // Additional validation for bus location completeness
+      if (typeof this.busLocation.latitude !== 'number' || 
+          typeof this.busLocation.longitude !== 'number') {
+        console.log('⚠️ Bus location incomplete - waiting for complete coordinates');
+        return;
+      }
+      
       // Find nearby stops (using Excel data only)
       const nearbyStops = this.findNearbyStops();
       
@@ -341,7 +360,21 @@ class UnifiedExcelService {
   findNearbyStops() {
     const nearbyStops = [];
     
+    // Validate bus location has both coordinates
+    if (!this.busLocation || 
+        typeof this.busLocation.latitude !== 'number' || 
+        typeof this.busLocation.longitude !== 'number') {
+      console.log('⚠️ Bus location incomplete - skipping distance calculations');
+      return nearbyStops;
+    }
+    
     for (const [stopId, stop] of this.excelStops) {
+      // Validate stop coordinates
+      if (typeof stop.latitude !== 'number' || typeof stop.longitude !== 'number') {
+        console.log(`⚠️ Stop ${stopId} has invalid coordinates - skipping`);
+        continue;
+      }
+      
       const distance = calculateDistance(this.busLocation, {
         latitude: stop.latitude,
         longitude: stop.longitude
