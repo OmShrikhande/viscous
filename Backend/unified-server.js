@@ -1,4 +1,3 @@
-
 /**
  * OPTIMIZED Unified Server for Bus Tracking System - QUOTA FIX
  * 
@@ -340,14 +339,21 @@ app.get('/tracking', (req, res) => {
 // Get current bus location
 app.get('/tracking/api/bus/location', async (req, res) => {
   try {
-    const location = unifiedExcelService.getBusLocation();
-    if (!location) {
+    let location = unifiedExcelService.getBusLocation();
+    // Defensive check: ensure latitude and longitude are valid numbers
+    if (
+      !location ||
+      typeof location.latitude !== 'number' ||
+      typeof location.longitude !== 'number' ||
+      isNaN(location.latitude) ||
+      isNaN(location.longitude)
+    ) {
       return res.status(404).json({
         success: false,
-        message: 'Bus location not available'
+        message: 'Bus location not available or invalid'
       });
     }
-    
+
     res.json({
       success: true,
       data: location,
@@ -366,8 +372,19 @@ app.get('/tracking/api/bus/location', async (req, res) => {
 app.get('/tracking/api/stops', async (req, res) => {
   try {
     const forceRefresh = req.query.refresh === 'true';
-    const stops = unifiedExcelService.getStops(forceRefresh);
-    
+    let stops = unifiedExcelService.getStops(forceRefresh);
+
+    // Defensive check: filter out stops with invalid lat/lng
+    stops = Array.isArray(stops)
+      ? stops.filter(
+          stop =>
+            typeof stop.latitude === 'number' &&
+            typeof stop.longitude === 'number' &&
+            !isNaN(stop.latitude) &&
+            !isNaN(stop.longitude)
+        )
+      : [];
+
     res.json({
       success: true,
       data: stops,
