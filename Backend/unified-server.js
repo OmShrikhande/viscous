@@ -336,24 +336,28 @@ app.get('/tracking', (req, res) => {
   res.send('Bus Tracking Server is running - Excel Optimized');
 });
 
+// Defensive utility to validate coordinates
+function isValidLatLng(obj) {
+  return (
+    obj &&
+    typeof obj.latitude === 'number' &&
+    typeof obj.longitude === 'number' &&
+    !isNaN(obj.latitude) &&
+    !isNaN(obj.longitude)
+  );
+}
+
 // Get current bus location
 app.get('/tracking/api/bus/location', async (req, res) => {
   try {
     let location = unifiedExcelService.getBusLocation();
-    // Defensive check: ensure latitude and longitude are valid numbers
-    if (
-      !location ||
-      typeof location.latitude !== 'number' ||
-      typeof location.longitude !== 'number' ||
-      isNaN(location.latitude) ||
-      isNaN(location.longitude)
-    ) {
+    if (!isValidLatLng(location)) {
+      console.warn('[Tracking] Invalid bus location data:', location);
       return res.status(404).json({
         success: false,
         message: 'Bus location not available or invalid'
       });
     }
-
     res.json({
       success: true,
       data: location,
@@ -376,14 +380,12 @@ app.get('/tracking/api/stops', async (req, res) => {
 
     // Defensive check: filter out stops with invalid lat/lng
     stops = Array.isArray(stops)
-      ? stops.filter(
-          stop =>
-            typeof stop.latitude === 'number' &&
-            typeof stop.longitude === 'number' &&
-            !isNaN(stop.latitude) &&
-            !isNaN(stop.longitude)
-        )
+      ? stops.filter(isValidLatLng)
       : [];
+
+    if (stops.length === 0) {
+      console.warn('[Tracking] All stops have invalid coordinates or no stops found.');
+    }
 
     res.json({
       success: true,
@@ -587,6 +589,14 @@ app.listen(PORT, async () => {
     console.log('Excel optimized server shutdown complete.');
     process.exit(0);
   });
+});
+
+// ===== GLOBAL ERROR HANDLERS =====
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
 });
 
 // ===== AUTO SERIAL ROTATION ON REACH LOGIC =====
