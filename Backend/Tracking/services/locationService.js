@@ -199,24 +199,46 @@ const markStopAsReached = async (stopId) => {
         stopsCache[stopIndex].reached = true;
         // Print serial number from cache if available
         if (stopsCache[stopIndex].serialNumber !== undefined) {
-          console.log(`Stop ${stopId} (Serial No: ${stopsCache[stopIndex].serialNumber}) marked as reached at ${formattedTime}`);
+          console.log(`Stop ${stopId} (Serial No: ${stopsCache[stopIndex].serialNumber}) marked as reached at ${formattedTime} noname`);
+
+
+
         } else if (serialNo !== null) {
-          console.log(`Stop ${stopId} (Serial No: ${serialNo}) marked as reached at ${formattedTime}`);
+          console.log(`Stop ${stopId} (Serial No: ${serialNo}) marked as reached at ${formattedTime} nonam`);
+      
+      
+      
         } else {
-          console.log(`Stop ${stopId} marked as reached at ${formattedTime}`);
+          console.log(`Stop ${stopId} marked as reached at ${formattedTime} nona`);
+      
+      
+      
         }
       } else {
         if (serialNo !== null) {
-          console.log(`Stop ${stopId} (Serial No: ${serialNo}) marked as reached at ${formattedTime}`);
+          console.log(`Stop ${stopId} (Serial No: ${serialNo}) marked as reached at ${formattedTime} non`);
+      
+      
+      
         } else {
-          console.log(`Stop ${stopId} marked as reached at ${formattedTime}`);
+          console.log(`Stop ${stopId} marked as reached at ${formattedTime} no`);
+      
+      
+      
+      
         }
       }
     } else {
       if (serialNo !== null) {
-        console.log(`Stop ${stopId} (Serial No: ${serialNo}) marked as reached at ${formattedTime}`);
+        console.log(`Stop ${stopId} (Serial No: ${serialNo}) marked as reached at ${formattedTime} n`);
+      
+      
+      
       } else {
-        console.log(`Stop ${stopId} marked as reached at ${formattedTime}`);
+        console.log(`Stop ${stopId} marked as reached at ${formattedTime} `);
+      
+      
+      
       }
     }
   } catch (error) {
