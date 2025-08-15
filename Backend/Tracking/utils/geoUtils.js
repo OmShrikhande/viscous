@@ -12,17 +12,25 @@ const calculateDistance = (point1, point2) => {
     throw new Error('Both points must be provided');
   }
   
-  if (typeof point1.latitude !== 'number' || typeof point1.longitude !== 'number') {
+  // Convert and validate point1 coordinates
+  const lat1 = parseFloat(point1.latitude);
+  const lng1 = parseFloat(point1.longitude);
+  
+  if (isNaN(lat1) || isNaN(lng1)) {
     throw new Error(`Invalid point1 coordinates: lat=${point1.latitude}, lng=${point1.longitude}`);
   }
   
-  if (typeof point2.latitude !== 'number' || typeof point2.longitude !== 'number') {
+  // Convert and validate point2 coordinates
+  const lat2 = parseFloat(point2.latitude);
+  const lng2 = parseFloat(point2.longitude);
+  
+  if (isNaN(lat2) || isNaN(lng2)) {
     throw new Error(`Invalid point2 coordinates: lat=${point2.latitude}, lng=${point2.longitude}`);
   }
   
   return geolib.getDistance(
-    { latitude: point1.latitude, longitude: point1.longitude },
-    { latitude: point2.latitude, longitude: point2.longitude }
+    { latitude: lat1, longitude: lng1 },
+    { latitude: lat2, longitude: lng2 }
   );
 };
 

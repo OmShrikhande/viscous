@@ -254,9 +254,11 @@ class UnifiedExcelService {
       console.log(`📍 Bus longitude updated: ${locationUpdate.longitude}`);
     }
     
-    // Only log complete location when both coordinates are valid numbers
-    if (typeof this.busLocation.latitude === 'number' && 
-        typeof this.busLocation.longitude === 'number') {
+    // Only log complete location when both coordinates are valid
+    if (this.busLocation.latitude != null && 
+        this.busLocation.longitude != null &&
+        !isNaN(parseFloat(this.busLocation.latitude)) &&
+        !isNaN(parseFloat(this.busLocation.longitude))) {
       console.log(`🚌 Bus location complete: (${this.busLocation.latitude}, ${this.busLocation.longitude})`);
     } else {
       console.log(`⚠️ Bus location incomplete: lat=${this.busLocation.latitude}, lng=${this.busLocation.longitude}`);
@@ -312,8 +314,10 @@ class UnifiedExcelService {
       }
       
       // Additional validation for bus location completeness
-      if (typeof this.busLocation.latitude !== 'number' || 
-          typeof this.busLocation.longitude !== 'number') {
+      if (this.busLocation.latitude == null || 
+          this.busLocation.longitude == null ||
+          isNaN(parseFloat(this.busLocation.latitude)) ||
+          isNaN(parseFloat(this.busLocation.longitude))) {
         console.log('⚠️ Bus location incomplete - waiting for complete coordinates');
         return;
       }
@@ -362,15 +366,18 @@ class UnifiedExcelService {
     
     // Validate bus location has both coordinates
     if (!this.busLocation || 
-        typeof this.busLocation.latitude !== 'number' || 
-        typeof this.busLocation.longitude !== 'number') {
+        this.busLocation.latitude == null || 
+        this.busLocation.longitude == null ||
+        isNaN(parseFloat(this.busLocation.latitude)) ||
+        isNaN(parseFloat(this.busLocation.longitude))) {
       console.log('⚠️ Bus location incomplete - skipping distance calculations');
       return nearbyStops;
     }
     
     for (const [stopId, stop] of this.excelStops) {
       // Validate stop coordinates
-      if (typeof stop.latitude !== 'number' || typeof stop.longitude !== 'number') {
+      if (stop.latitude == null || stop.longitude == null ||
+          isNaN(parseFloat(stop.latitude)) || isNaN(parseFloat(stop.longitude))) {
         console.log(`⚠️ Stop ${stopId} has invalid coordinates - skipping`);
         continue;
       }
