@@ -201,12 +201,18 @@ const markStopAsReached = async (stopId) => {
         if (stopsCache[stopIndex].serialNumber !== undefined) {
           console.log(`Stop ${stopId} (Serial No: ${stopsCache[stopIndex].serialNumber}) marked as reached at ${formattedTime} noname`);
           if (stopsCache[stopIndex].serialNumber === 17) {
-            console.log("All stops (serialNumber==17):", JSON.stringify(stopsCache, null, 2));
+            // Sort stops by serialNumber ascending
+            const sortedStops = [...stopsCache].sort((a, b) => (a.serialNumber ?? 0) - (b.serialNumber ?? 0));
+            // Print all stops with their serial numbers in order
+            console.log("All stops sorted by serialNumber:", JSON.stringify(sortedStops, null, 2));
           }
         } else if (serialNo !== null) {
           console.log(`Stop ${stopId} (Serial No: ${serialNo}) marked as reached at ${formattedTime} nonam`);
           if (serialNo === 17) {
-            console.log("All stops (serialNumber==17):", JSON.stringify(stopsCache, null, 2));
+            // Sort stops by serialNumber ascending
+            const sortedStops = [...stopsCache].sort((a, b) => (a.serialNumber ?? 0) - (b.serialNumber ?? 0));
+            // Print all stops with their serial numbers in order
+            console.log("All stops sorted by serialNumber:", JSON.stringify(sortedStops, null, 2));
           }
         } else {
           console.log(`Stop ${stopId} marked as reached at ${formattedTime} nona`);
@@ -215,7 +221,10 @@ const markStopAsReached = async (stopId) => {
         if (serialNo !== null) {
           console.log(`Stop ${stopId} (Serial No: ${serialNo}) marked as reached at ${formattedTime} non`);
           if (serialNo === 17) {
-            console.log("All stops (serialNumber==17):", JSON.stringify(stopsCache, null, 2));
+            // Sort stops by serialNumber ascending
+            const sortedStops = [...stopsCache].sort((a, b) => (a.serialNumber ?? 0) - (b.serialNumber ?? 0));
+            // Print all stops with their serial numbers in order
+            console.log("All stops sorted by serialNumber:", JSON.stringify(sortedStops, null, 2));
           }
         } else {
           console.log(`Stop ${stopId} marked as reached at ${formattedTime} no`);
@@ -225,7 +234,10 @@ const markStopAsReached = async (stopId) => {
       if (serialNo !== null) {
         console.log(`Stop ${stopId} (Serial No: ${serialNo}) marked as reached at ${formattedTime} n`);
         if (serialNo === 17) {
-          console.log("All stops (serialNumber==17):", JSON.stringify(stopsCache, null, 2));
+          // Sort stops by serialNumber ascending
+          const sortedStops = [...stopsCache].sort((a, b) => (a.serialNumber ?? 0) - (b.serialNumber ?? 0));
+          // Print all stops with their serial numbers in order
+          console.log("All stops sorted by serialNumber:", JSON.stringify(sortedStops, null, 2));
         }
       } else {
         console.log(`Stop ${stopId} marked as reached at ${formattedTime} `);
