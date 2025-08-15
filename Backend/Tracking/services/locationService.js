@@ -1,6 +1,6 @@
 // Import Firebase modules directly
 const { ref, onValue, get, child } = require('firebase/database');
-const { collection, doc, getDoc, getDocs, updateDoc, Timestamp, setDoc } = require('firebase/firestore');
+const { collection, doc, getDoc, getDocs, updateDoc, Timestamp, setDoc, query, orderBy } = require('firebase/firestore');
 
 const { realtimeDatabase, firestoreDb } = require('./../config/firebase');
 const { isWithinRadius, calculateDistance } = require('../utils/geoUtils');
@@ -210,9 +210,8 @@ const markStopAsReached = async (stopId) => {
           console.log(`Stop ${stopId} (Serial No: ${serialNo}) marked as reached at ${formattedTime} nonam`);
           if (serialNo === 17) {
             // Sort stops by serialNumber ascending
-            const sortedStops = [...stopsCache].sort((a, b) => (a.serialNumber ?? 0) - (b.serialNumber ?? 0));
-            // Print all stops with their serial numbers in order
-            console.log("All stops sorted by serialNumber:", JSON.stringify(sortedStops, null, 2));
+              printAllStopsSortedBySerialNumber();
+            
           }
         } else {
           console.log(`Stop ${stopId} marked as reached at ${formattedTime} nona`);
@@ -763,6 +762,70 @@ const performResetCheck = (now, currentDate, hours, minutes) => {
     console.error('Error comparing dates:', error);
   }
 };
+
+// Function to fetch all stops from Firestore and print them sorted by serialNumber.
+const printAllStopsSortedBySerialNumber = async () => {
+  try {
+    const route2CollectionRef = collection(firestoreDb, 'Route2');
+    const querySnapshot = await getDocs(route2CollectionRef);
+    const stops = [];
+    querySnapshot.forEach((docSnapshot) => {
+      const data = docSnapshot.data();
+      stops.push({
+        id: docSnapshot.id,
+        serialNumber: data.serialNumber ?? null
+      });
+    });
+    // Sort by serialNumber ascending
+    const sortedStops = stops
+      .filter(stop => stop.serialNumber !== null)
+      .sort((a, b) => a.serialNumber - b.serialNumber);
+    console.log("All stops sorted by serialNumber (from Firestore):", JSON.stringify(sortedStops, null, 2));
+
+    flipSerialNumbers();
+  } catch (err) {
+    console.error("Error fetching stops from Firestore for serialNumber print:", err);
+  }
+};
+
+
+
+
+async function flipSerialNumbers() {
+  // 1. Get stops sorted by serialNumber
+  const q = query(collection(firestoreDb, "Route2"), orderBy("serialNumber", "asc")); 
+  const snapshot = await getDocs(q);
+
+  // 2. Put them in an array
+  const stops = snapshot.docs.map(docSnap => ({
+    id: docSnap.id, // document name
+    serialNumber: docSnap.data().serialNumber
+  }));
+
+  const n = stops.length;
+
+  // 3. Update serialNumbers in place
+  for (let i = 0; i < n; i++) {
+    const newSerial = n - i;
+    await updateDoc(doc(firestoreDb, "Route2", stops[i].id), { 
+      serialNumber: newSerial
+    });
+  }
+
+  console.log("Serial numbers flipped successfully!");
+}
+
+
+
+
+
+
+
+
+
+
+
+
 
 module.exports = {
   getBusLocation,
