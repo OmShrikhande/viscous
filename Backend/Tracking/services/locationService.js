@@ -169,14 +169,21 @@ const markStopAsReached = async (stopId) => {
   try {
     // Reference the specific document in Route2 collection
     const stopRef = doc(firestoreDb, 'Route2', stopId);
-    
+
     // Get current timestamp
     const reachedTimestamp = Timestamp.now();
-    
+
     // Format the time as a readable string (HH:MM:SS)
     const date = new Date(reachedTimestamp.toMillis());
     const formattedTime = date.toLocaleTimeString();
-    
+
+    // Fetch the stop document to get serialNumber
+    const stopDoc = await getDoc(stopRef);
+    let serialNo = null;
+    if (stopDoc.exists() && stopDoc.data().serialNumber !== undefined) {
+      serialNo = stopDoc.data().serialNumber;
+    }
+
     // Update the document with reached status and timestamps
     await updateDoc(stopRef, {
       reached: true,
@@ -184,17 +191,34 @@ const markStopAsReached = async (stopId) => {
       reachedTime: formattedTime,
       reachedDate: date.toLocaleDateString()
     });
-    
+//prints serial number along with making the stop reached
     // Update the cache if it exists
     if (stopsCache) {
       const stopIndex = stopsCache.findIndex(stop => stop.id === stopId);
       if (stopIndex !== -1) {
         stopsCache[stopIndex].reached = true;
-        console.log(`Updated stops cache for stop ${stopId}`);
+        // Print serial number from cache if available
+        if (stopsCache[stopIndex].serialNumber !== undefined) {
+          console.log(`Stop ${stopId} (Serial No: ${stopsCache[stopIndex].serialNumber}) marked as reached at ${formattedTime}`);
+        } else if (serialNo !== null) {
+          console.log(`Stop ${stopId} (Serial No: ${serialNo}) marked as reached at ${formattedTime}`);
+        } else {
+          console.log(`Stop ${stopId} marked as reached at ${formattedTime}`);
+        }
+      } else {
+        if (serialNo !== null) {
+          console.log(`Stop ${stopId} (Serial No: ${serialNo}) marked as reached at ${formattedTime}`);
+        } else {
+          console.log(`Stop ${stopId} marked as reached at ${formattedTime}`);
+        }
+      }
+    } else {
+      if (serialNo !== null) {
+        console.log(`Stop ${stopId} (Serial No: ${serialNo}) marked as reached at ${formattedTime}`);
+      } else {
+        console.log(`Stop ${stopId} marked as reached at ${formattedTime}`);
       }
     }
-    
-    console.log(`Stop ${stopId} marked as reached at ${formattedTime}`);
   } catch (error) {
     console.error(`Error marking stop ${stopId} as reached:`, error);
     throw error;
