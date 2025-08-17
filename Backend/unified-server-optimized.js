@@ -136,7 +136,8 @@ const unifiedExcelService = new UnifiedExcelService(realtimeDatabase, firestoreD
 
 // ===== HEALTH CHECK ROUTE =====
 
-// Health check endpoint to keep the server alive
+/*
+// Health check endpoint to keep the server alive (DISABLED)
 app.get('/health', (req, res) => {
   const uptime = process.uptime();
   const uptimeHours = Math.floor(uptime / 3600);
@@ -188,6 +189,7 @@ app.get('/keep-alive', (req, res) => {
     message: 'Excel-optimized server is alive and responding'
   });
 });
+*/
 
 // Root endpoint
 app.get('/', (req, res) => {

@@ -102,6 +102,6 @@ process.on('SIGTERM', () => {
   process.exit(0);
 });
 
-// Show next ping time
-const nextPing = new Date(Date.now() + PING_INTERVAL);
-console.log(`⏭️  Next ping scheduled at: ${nextPing.toLocaleString()}`);
+// Next ping scheduling disabled
+// const nextPing = new Date(Date.now() + PING_INTERVAL);
+// console.log(`⏭️  Next ping scheduled at: ${nextPing.toLocaleString()}`);
