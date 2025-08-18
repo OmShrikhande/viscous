@@ -326,7 +326,7 @@ if (process.env.MONGODB_URI) {
 
 // ===== HEALTH CHECK ROUTE =====
 
-/*
+
 // Health check endpoint to keep the server alive (DISABLED)
 app.get('/health', (req, res) => {
   const uptime = process.uptime();
@@ -384,7 +384,7 @@ app.get('/keep-alive', (req, res) => {
     message: 'Server is alive and responding'
   });
 });
-*/
+
 
 // Root endpoint
 app.get('/', (req, res) => {
