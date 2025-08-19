@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore, doc, setDoc } from "firebase/firestore";
+import { doc, getFirestore, setDoc } from "firebase/firestore";
 
 // Firebase config
 const firebaseConfig = {
@@ -30,6 +30,14 @@ function formatTime(date) {
   return date.toTimeString().split(" ")[0].replace(/:/g, "");
 }
 
+// Format date as DDMMYY
+function formatDateDDMMYY(date) {
+  const dd = String(date.getDate()).padStart(2, '0');
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const yy = String(date.getFullYear()).slice(-2);
+  return `${dd}${mm}${yy}`;
+}
+
 // Main function to add entries
 async function addEntriesByTime() {
   const dateDoc = "1462025";
@@ -44,7 +52,7 @@ async function addEntriesByTime() {
     const data = {
       latitude: location.latitude,
       longitude: location.longitude,
-      time: now.toISOString(),
+      time: formatDateDDMMYY(now), // <-- DDMMYY format
       speed: 30 + Math.floor(Math.random() * 10),
       driverName: `Driver ${i + 1}`,
       status: i % 2 === 0 ? "Running" : "Stopped"
