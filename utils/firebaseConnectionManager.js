@@ -1,8 +1,8 @@
-import { AppState } from 'react-native';
-import { getApp, getApps, initializeApp } from 'firebase/app';
-import { getDatabase, goOffline, goOnline } from 'firebase/database';
-import { getFirestore, connectFirestoreEmulator, enableNetwork, disableNetwork } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getApp, getApps, initializeApp } from 'firebase/app';
+import { getDatabase, goOffline, goOnline, onValue, ref } from 'firebase/database';
+import { disableNetwork, enableNetwork, getFirestore, initializeFirestore, memoryLocalCache } from 'firebase/firestore';
+import { AppState } from 'react-native';
 
 // Firebase configuration
 const firebaseConfig = {
@@ -82,21 +82,20 @@ class FirebaseConnectionManager {
       this.database = getDatabase(this.app);
       console.log('✅ Realtime Database initialized');
       
-      // Initialize Firestore
-      this.firestore = getFirestore(this.app);
-      console.log('✅ Firestore initialized');
-      
-      // Enable persistence for offline support
-      if (this.enablePersistence && !this.persistenceEnabled) {
-        try {
-          // Note: Firestore persistence is automatically enabled in React Native
-          // For Realtime Database, we rely on built-in disk persistence
-          this.persistenceEnabled = true;
-          console.log('✅ Firebase persistence enabled');
-        } catch (persistenceError) {
-          console.warn('⚠️ Could not enable persistence:', persistenceError);
-        }
+      // Initialize Firestore with safe memory cache (avoid IndexedDB/SQLite issues on RN/Hermes)
+      try {
+        this.firestore = initializeFirestore(this.app, {
+          localCache: memoryLocalCache()
+        });
+        console.log('✅ Firestore initialized with memory cache');
+      } catch (e) {
+        // If already initialized, get existing instance
+        this.firestore = getFirestore(this.app);
+        console.log('✅ Firestore instance obtained');
       }
+      
+      // Mark persistence flag (we're using memory cache for reliability)
+      this.persistenceEnabled = true;
       
       this.isConnected = true;
       this.reconnectAttempts = 0;
@@ -130,20 +129,18 @@ class FirebaseConnectionManager {
   async checkConnection() {
     try {
       // Use a lightweight operation to check connection
-      const testRef = this.database.ref('.info/connected');
+      const testRef = ref(this.database, '.info/connected');
       
       // Set up a one-time listener for connection status
       const connectedPromise = new Promise((resolve) => {
-        const unsubscribe = testRef.on('value', (snapshot) => {
-          unsubscribe();
-          resolve(snapshot.val());
-        });
-        
-        // Timeout after 10 seconds
-        setTimeout(() => {
-          unsubscribe();
+        const timeoutId = setTimeout(() => {
           resolve(false);
         }, 10000);
+
+        onValue(testRef, (snapshot) => {
+          clearTimeout(timeoutId);
+          resolve(snapshot.val());
+        }, { onlyOnce: true });
       });
       
       const connected = await connectedPromise;

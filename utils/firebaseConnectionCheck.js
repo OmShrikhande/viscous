@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { collection, getDocs, limit, query } from 'firebase/firestore';
-import connectionManager, { getConnectionStatus } from './firebaseConnectionManager';
+import connectionManager from './firebaseConnectionManager';
 
 // Keep track of connection status
 let isConnected = true;
